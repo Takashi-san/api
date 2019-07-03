@@ -89,10 +89,10 @@ module.exports = (
     });
   });
 
-  let recreateLnServices = (callback, cs) => {
+  let recreateLnServices = async (callback, cs) => {
     cs();
 
-    let lnServices = require("../services/lnd/lightning")(
+    let lnServices = await require("../services/lnd/lightning")(
       lnServicesData.lndProto,
       lnServicesData.lndHost,
       lnServicesData.lndCertPath,
@@ -222,13 +222,13 @@ module.exports = (
               console.log(
                 `Waiting for admin.macaroon to be created. Seconds passed: ${seconds}`
               );
-              setTimeout(() => {
+              setTimeout(async () => {
                 // if (!fs.existsSync(dirPath + '/admin.macaroon')) {
                 if (!fs.existsSync(lnServicesData.macaroonPath)) {
                   return waitUntilFileExists(seconds + 1);
                 } else {
                   mySocketsEvents.emit("updateLightning");
-                  let lnServices = require("../services/lnd/lightning")(
+                  let lnServices = await require("../services/lnd/lightning")(
                     lnServicesData.lndProto,
                     lnServicesData.lndHost,
                     lnServicesData.lndCertPath,

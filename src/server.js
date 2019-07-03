@@ -55,7 +55,6 @@ module.exports = async program => {
 
   // init lnd module =================
   const lnd = require("../services/lnd/lnd")(lightning);
-//  const auth = require("../services/auth/auth");
 
   const unprotectedRoutes = {
     GET: {
