@@ -20,9 +20,9 @@ module.exports = {
 	// lndCertPath: __dirname + "/../lnd.cert",
 	// macaroonPath: __dirname + "/../admin.macaroon",
 	lndCertPath: lndDirectory + "/tls.cert",
-	macaroonPath: lndDirectory + "/admin.macaroon",
+	macaroonPath: lndDirectory + "/data/chain/bitcoin/testnet/admin.macaroon",
 	dataPath: __dirname + "/../data",
 	loglevel: "info",
 	logfile: "lncliweb.log",
-	lndLogFile: lndDirectory + "/.lnd/logs/bitcoin/testnet/lnd.log"
+	lndLogFile: lndDirectory + "/logs/bitcoin/testnet/lnd.log"
 };
