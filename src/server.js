@@ -58,6 +58,7 @@ module.exports = async program => {
 
   const unprotectedRoutes = {
     GET: {
+      "/healthz": true,
       "/api/lnd/connect": true
     },
     POST: {
