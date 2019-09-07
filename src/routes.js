@@ -63,6 +63,13 @@ module.exports = (
     res.send(health);
   });
 
+  /**
+   * kubernetes health check
+   */
+  app.get("/healthz", async (req, res) => {
+    res.send('OK');
+  });
+
   app.get("/api/lnd/connect", (req, res) => {
     res.status(200);
     res.json({});
