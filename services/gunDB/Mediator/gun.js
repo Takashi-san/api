@@ -1,5 +1,5 @@
-require("gun/sea");
 const Gun = require("gun");
+require("gun/sea");
 const Config = require("../config");
 const uuidv1 = require("uuid/v1");
 
