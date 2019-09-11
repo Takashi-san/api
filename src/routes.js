@@ -9,7 +9,10 @@ const graphviz = require("graphviz");
 const commandExistsSync = require("command-exists").sync;
 const auth = require("../services/auth/auth");
 const rp = require("request-promise");
+const responseTime = require("response-time");
 const jsonfile = require("jsonfile");
+const server = require("./server");
+const Http = require("axios");
 
 const DEFAULT_MAX_NUM_ROUTES_TO_QUERY = 10;
 
@@ -22,17 +25,39 @@ module.exports = (
   config,
   walletUnlocker,
   lnServicesData,
-  mySocketsEvents
+  mySocketsEvents,
+  { serverHost, serverPort }
 ) => {
   const checkHealth = () => {
     return new Promise((resolve, reject) => {
-      lightning.getInfo({}, function(err, response) {
-        if (err) {
-          console.log(`Synched to chain: false`);
-          resolve({ connectedToLnd: false });
-        } else {
-          console.log(`Synched to chain: ${response.synced_to_chain}`);
-          resolve({ connectedToLnd: true });
+      lightning.getInfo({}, async (err, response) => {
+        const LNDStatus = {
+          message: err ? err.details : "Success",
+          success: !!err
+        };
+        try {
+          const APIHealth = await Http.get(
+            `http://localhost:${serverPort}/ping`
+          );
+          const APIStatus = {
+            message: APIHealth.data,
+            responseTime: APIHealth.headers["x-response-time"],
+            success: true
+          };
+          resolve({
+            LNDStatus,
+            APIStatus
+          });
+        } catch (err) {
+          const APIStatus = {
+            message: err.response.data,
+            responseTime: APIHealth.headers["x-response-time"],
+            success: false
+          };
+          resolve({
+            LNDStatus,
+            APIStatus
+          });
         }
       });
     });
@@ -54,6 +79,8 @@ module.exports = (
     }
   };
 
+  app.use(["/ping"], responseTime());
+
   /**
    * health check
    */
@@ -67,7 +94,12 @@ module.exports = (
    * kubernetes health check
    */
   app.get("/healthz", async (req, res) => {
-    res.send('OK');
+    const health = await checkHealth();
+    res.send(health);
+  });
+
+  app.get("/ping", async (req, res) => {
+    res.send("OK");
   });
 
   app.get("/api/lnd/connect", (req, res) => {

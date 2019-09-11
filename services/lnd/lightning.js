@@ -4,6 +4,7 @@ const protoFiles = require("google-proto-files");
 const fs = require("fs");
 const logger = require("winston");
 const debug = require("debug")("lncliweb:lightning");
+const errorConstants = require("../../constants/errors");
 
 // expose the routes to our app with module.exports
 module.exports = async (protoPath, lndHost, lndCertPath, macaroonPath) => {
@@ -40,13 +41,9 @@ module.exports = async (protoPath, lndHost, lndCertPath, macaroonPath) => {
             macaroonCreds
           );
         } else {
-          logger.error(
-            'The specified macaroon file "' +
-              macaroonPath +
-              '" was not found.\n' +
-              "Please add the missing lnd macaroon file or update/remove the path in the application configuration."
-          );
-          process.exit(1);
+          const error = errorConstants.MACAROON_PATH(macaroonPath);
+          logger.error(error);
+          throw error;
         }
       } else {
         credentials = sslCreds;
@@ -60,18 +57,13 @@ module.exports = async (protoPath, lndHost, lndCertPath, macaroonPath) => {
         walletUnlocker
       };
     } else {
-      logger.error(
-        'The specified lnd certificate file "' +
-          lndCertPath +
-          '" was not found.\n' +
-          "Please add the missing lnd certificate file or update the path in the application configuration."
-      );
-      process.exit(1);
+      const error = errorConstants.CERT_PATH(lndCertPath);
+      logger.error(error);
+      throw error;
     }
   } else {
-    logger.error(
-      "Required lnd certificate path missing from application configuration."
-    );
-    process.exit(1);
+    const error = errorConstants.MACAROON_PATH(macaroonPath);
+    logger.error(error);
+    throw error;
   }
 };
