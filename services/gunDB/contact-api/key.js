@@ -1,0 +1,12 @@
+export const AVATAR = "avatar";
+export const BLACKLIST = "blacklist";
+export const CURRENT_HANDSHAKE_NODE = "currentHandshakeNode";
+export const DISPLAY_NAME = "displayName";
+export const MESSAGES = "messages";
+export const OUTGOINGS = "outgoings";
+export const PROFILE = "Profile";
+export const RECIPIENT_TO_OUTGOING = "recipientToOutgoing";
+export const REQUEST_TO_USER = "requestToUser";
+export const HANDSHAKE_NODES = "handshakeNodes";
+export const SENT_REQUESTS = "sentRequests";
+export const USER_TO_INCOMING = "userToIncoming";
