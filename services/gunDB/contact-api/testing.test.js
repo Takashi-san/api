@@ -1,6 +1,6 @@
 /** @prettier */
-import { createMockGun } from "./__mocks__/mock-gun.js";
-import { __MOCK_USER_SUPER_NODE, injectSeaMockToGun } from "./testing.js";
+const { createMockGun } = require("./__mocks__/mock-gun");
+const { __MOCK_USER_SUPER_NODE, injectSeaMockToGun } = require("./testing");
 
 /**
  * @typedef {import('./SimpleGUN').GUNNode} GUNNode

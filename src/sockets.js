@@ -5,9 +5,10 @@ const logger = require("winston");
 const spawn = require("child_process").spawn;
 const grpc = require("grpc");
 const bitcore = require("bitcore-lib");
-const BufferUtil = bitcore.util.buffer;
-const staticClientFunc = require("../services/staticClient/staticClient");
+const Mediator = require("../services/gunDB/Mediator/index.js");
 const fs = require("fs");
+const staticClientFunc = require("../services/staticClient/staticClient");
+const BufferUtil = bitcore.util.buffer;
 
 // TODO
 module.exports = function(
@@ -157,6 +158,8 @@ module.exports = function(
     // socketConnection = socket;
     // this is where we create the websocket connection
     // with the static service.
+
+    new Mediator(socket);
 
     let lnServices;
     if (fs.existsSync(lnServicesData.macaroonPath)) {

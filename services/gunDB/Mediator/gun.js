@@ -1,7 +1,7 @@
-import Gun from "gun";
-import "gun/sea.js";
-import * as Config from "../config.js";
-import uuidv1 from "uuid/v1.js";
+require("gun/sea");
+const Gun = require("gun");
+const Config = require("../config");
+const uuidv1 = require("uuid/v1");
 
 /**
  * @typedef {import('../contact-api/SimpleGUN').GUNNode} GunNode
@@ -11,7 +11,7 @@ import uuidv1 from "uuid/v1.js";
 /**
  * @returns {GunNode}
  */
-export const createGun = () =>
+exports.createGun = () =>
   // @ts-ignore
   Gun({
     file: Config.DATA_FILE_NAME,
@@ -32,7 +32,7 @@ const aliasToUser = {};
  * @param {string} alias
  * @returns {string|null}
  */
-export const getTokenForAlias = alias => {
+exports.getTokenForAlias = alias => {
   const maybeTokenAliasPair = Object.entries(tokenToAlias).find(
     ([_, al]) => al === alias
   );
@@ -50,7 +50,7 @@ export const getTokenForAlias = alias => {
  * @param {string} alias
  * @returns {UserGUNNode}
  */
-export const getUserForAlias = alias => {
+exports.getUserForAlias = alias => {
   if (!aliasToUser[alias]) {
     aliasToUser[alias] = createGun().user();
 
@@ -102,7 +102,7 @@ export const getUserForAlias = alias => {
  * @throws {ReferenceError}
  * @returns {UserGUNNode|null} Returns null if the token has expired.
  */
-export const getUserForToken = token => {
+exports.getUserForToken = token => {
   if (!tokenToAlias[token]) {
     return null;
   }

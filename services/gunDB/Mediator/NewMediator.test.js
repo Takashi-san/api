@@ -1,6 +1,6 @@
-import io from "socket.io-client";
-import http from "http";
-import ioBack from "socket.io";
+const io = require("socket.io-client");
+const http = require("http");
+const ioBack = require("socket.io");
 
 /** @type {ReturnType<typeof io.connect>} */
 let socket;

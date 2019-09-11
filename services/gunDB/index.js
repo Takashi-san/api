@@ -1,8 +1,8 @@
-import Express from "express";
-import Http from "http";
-import IO from "socket.io";
+const Express = require("express");
+const Http = require("http");
+const IO = require("socket.io");
 
-import Mediator from "./Mediator/index.js";
+const Mediator = require("./Mediator/index.js");
 
 const app = Express();
 const http = Http.createServer(app);

@@ -1,13 +1,13 @@
 /**
  * @prettier
  */
-import * as Actions from "./actions.js";
-import * as ErrorCode from "./errorCode.js";
-import * as Events from "./events.js";
-import * as Key from "./key.js";
-import * as Jobs from "./jobs.js";
-import { createMockGun } from "./__mocks__/mock-gun.js";
-import { injectSeaMockToGun, __MOCK_USER_SUPER_NODE } from "./testing.js";
+const Actions = require("./actions");
+const ErrorCode = require("./errorCode");
+const Events = require("./events");
+const Key = require("./key");
+const Jobs = require("./jobs");
+const { createMockGun } = require("./__mocks__/mock-gun");
+const { injectSeaMockToGun, __MOCK_USER_SUPER_NODE } = require("./testing");
 /**
  * @typedef {import('./SimpleGUN').GUNNode} GUNNode
  * @typedef {import('./schema').HandshakeRequest} HandshakeRequest

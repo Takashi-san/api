@@ -1,10 +1,10 @@
 /**
  * @prettier
  */
-import * as ErrorCode from "./errorCode.js";
-import * as Key from "./key.js";
-import { gun as mainGun, user as userGun } from "./gun.js";
-import { isHandshakeRequest } from "./schema.js";
+const ErrorCode = require("./errorCode");
+const Key = require("./key");
+const { gun: mainGun, user: userGun } = require("./gun");
+const { isHandshakeRequest } = require("./schema");
 /**
  * @typedef {import('./SimpleGUN').GUNNode} GUNNode
  * @typedef {import('./SimpleGUN').UserGUNNode} UserGUNNode
@@ -17,7 +17,7 @@ import { isHandshakeRequest } from "./schema.js";
 /**
  * An special message signaling the acceptance.
  */
-export const INITIAL_MSG = "$$__SHOCKWALLET__INITIAL__MESSAGE";
+exports.INITIAL_MSG = "$$__SHOCKWALLET__INITIAL__MESSAGE";
 
 /**
  * @returns {Message}
@@ -36,7 +36,7 @@ const __createInitialMessage = () => ({
  * @throws {ErrorCode.COULDNT_PUT_REQUEST_RESPONSE}
  * @returns {Promise<void>}
  */
-export const __encryptAndPutResponseToRequest = (
+exports.__encryptAndPutResponseToRequest = (
   requestID,
   requestorPubKey,
   responseBody,
@@ -104,7 +104,7 @@ export const __encryptAndPutResponseToRequest = (
  * @param {UserGUNNode} user
  * @returns {Promise<string>}
  */
-export const __createOutgoingFeed = (withPublicKey, user) =>
+exports.__createOutgoingFeed = (withPublicKey, user) =>
   new Promise((resolve, reject) => {
     if (!user.is) {
       throw new Error(ErrorCode.NOT_AUTH);
@@ -153,7 +153,7 @@ export const __createOutgoingFeed = (withPublicKey, user) =>
  * gun's part.
  * @returns {Promise<void>}
  */
-export const acceptRequest = (
+exports.acceptRequest = (
   requestID,
   user = userGun,
   outgoingFeedCreator = __createOutgoingFeed,
@@ -237,7 +237,7 @@ export const acceptRequest = (
  * @param {string} pass
  * @param {UserGUNNode} userNode
  */
-export const authenticate = (user, pass, userNode = userGun) =>
+exports.authenticate = (user, pass, userNode = userGun) =>
   new Promise((resolve, reject) => {
     if (typeof user !== "string") {
       throw new TypeError("expected user to be of type string");
@@ -276,7 +276,7 @@ export const authenticate = (user, pass, userNode = userGun) =>
  * @throws {Error} If there's an error saving to the blacklist.
  * @returns {Promise<void>}
  */
-export const blacklist = (publicKey, user = userGun) =>
+exports.blacklist = (publicKey, user = userGun) =>
   new Promise((resolve, reject) => {
     if (!user.is) {
       throw new Error(ErrorCode.NOT_AUTH);
@@ -297,7 +297,7 @@ export const blacklist = (publicKey, user = userGun) =>
  * @throws {TypeError}
  * @returns {Promise<void>}
  */
-export const generateNewHandshakeNode = (gun = mainGun, user = userGun) =>
+exports.generateNewHandshakeNode = (gun = mainGun, user = userGun) =>
   new Promise((resolve, reject) => {
     if (!user.is) {
       throw new Error(ErrorCode.NOT_AUTH);
@@ -326,7 +326,7 @@ export const generateNewHandshakeNode = (gun = mainGun, user = userGun) =>
  * @throws {Error} UNSUCCESSFUL_LOGOUT
  * @returns {Promise<void>}
  */
-export const logout = (user = userGun) => {
+exports.logout = (user = userGun) => {
   if (!user.is) {
     return Promise.reject(new Error(ErrorCode.NOT_AUTH));
   }
@@ -349,7 +349,7 @@ export const logout = (user = userGun) => {
  * @param {UserGUNNode} user
  * @returns {Promise<void>}
  */
-export const register = (alias, pass, user = userGun) =>
+exports.register = (alias, pass, user = userGun) =>
   new Promise((resolve, reject) => {
     const u = /** @type {UserGUNNode} */ (user);
 
@@ -386,7 +386,7 @@ export const register = (alias, pass, user = userGun) =>
  * @throws {Error|TypeError}
  * @returns {Promise<void>}
  */
-export const sendHandshakeRequest = (
+exports.sendHandshakeRequest = (
   handshakeAddress,
   recipientPublicKey,
   gun = mainGun,
@@ -486,7 +486,7 @@ export const sendHandshakeRequest = (
  * @param {UserGUNNode} user
  * @returns {Promise<void>}
  */
-export const sendMessage = (recipientPublicKey, body, user) => {
+exports.sendMessage = (recipientPublicKey, body, user) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -560,7 +560,7 @@ export const sendMessage = (recipientPublicKey, body, user) => {
  * @throws {TypeError} Rejects if avatar is not an string or an empty string.
  * @returns {Promise<void>}
  */
-export const setAvatar = (avatar, user = userGun) =>
+exports.setAvatar = (avatar, user = userGun) =>
   new Promise((resolve, reject) => {
     if (!user.is) {
       throw new Error(ErrorCode.NOT_AUTH);
@@ -597,7 +597,7 @@ export const setAvatar = (avatar, user = userGun) =>
  * string.
  * @returns {Promise<void>}
  */
-export const setDisplayName = (displayName, user = userGun) =>
+exports.setDisplayName = (displayName, user = userGun) =>
   new Promise((resolve, reject) => {
     if (!user.is) {
       throw new Error(ErrorCode.NOT_AUTH);

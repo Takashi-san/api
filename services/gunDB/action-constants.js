@@ -11,4 +11,4 @@ const Actions = {
   SET_DISPLAY_NAME: "SET_DISPLAY_NAME"
 };
 
-export default Actions;
+module.exports = Actions;

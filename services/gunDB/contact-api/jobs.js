@@ -10,10 +10,11 @@
  * auto-testable. These tasks accept factories that are homonymous to the events
  * on the same
  */
-import * as ErrorCode from "./errorCode.js";
-import * as Events from "./events.js";
-import * as Key from "./key.js";
-import { user as userGun } from "./gun.js";
+const ErrorCode = require("./errorCode");
+const Events = require("./events");
+const Key = require("./key");
+const { user: userGun } = require("./gun");
+
 /**
  * @typedef {import('./SimpleGUN').GUNNode} GUNNode
  * @typedef {import('./schema').HandshakeRequest} HandshakeRequest
@@ -30,7 +31,7 @@ import { user as userGun } from "./gun.js";
  * @throws {Error} NOT_AUTH
  * @param {UserGUNNode=} user Pass only for testing purposes.
  */
-export const onAcceptedRequests = (
+exports.onAcceptedRequests = (
   onSentRequestsFactory = Events.onSentRequests,
   user = userGun
 ) => {

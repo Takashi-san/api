@@ -1,7 +1,7 @@
-import Action from "../action-constants.js";
-import * as API from "../contact-api/index.js";
-import Event from "../event-constants.js";
-import * as Gun from "./gun.js";
+const Action = require("../action-constants.js");
+const API = require("../contact-api/index");
+const Event = require("../event-constants");
+const Gun = require("./gun");
 /**
  * @typedef {import('../contact-api/SimpleGUN').GUNNode} GUNNode
  * @typedef {import('../contact-api/SimpleGUN').UserGUNNode} UserGUNNode
@@ -87,7 +87,7 @@ const createUserForListening = publicKey => {
  * @prop {(eventName: string, handler: (data: any) => void) => void} on
  */
 
-export default class Mediator {
+module.exports = class Mediator {
   /**
    * @param {Readonly<SimpleSocket>} socket
    */
@@ -834,4 +834,4 @@ export default class Mediator {
       user
     );
   };
-}
+};

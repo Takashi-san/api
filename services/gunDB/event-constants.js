@@ -9,4 +9,4 @@ const Events = {
   ON_SENT_REQUESTS: "ON_SENT_REQUESTS"
 };
 
-export default Events;
+module.exports = Events;

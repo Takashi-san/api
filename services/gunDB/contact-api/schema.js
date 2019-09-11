@@ -30,7 +30,7 @@
  * @param {any} o
  * @returns {o is ChatMessage}
  */
-export const isChatMessage = o => {
+exports.isChatMessage = o => {
   if (typeof o !== "object") {
     return false;
   }
@@ -75,7 +75,7 @@ export const isChatMessage = o => {
  * @param {any} o
  * @returns {o is Chat}
  */
-export const isChat = o => {
+exports.isChat = o => {
   if (typeof o !== "object") {
     return false;
   }
@@ -132,7 +132,7 @@ export const isChat = o => {
  * @param {any} o
  * @returns {o is SimpleSentRequest}
  */
-export const isSimpleSentRequest = o => {
+exports.isSimpleSentRequest = o => {
   if (typeof o !== "object") {
     return false;
   }
@@ -187,7 +187,7 @@ export const isSimpleSentRequest = o => {
  * @param {any} o
  * @returns {o is SimpleReceivedRequest}
  */
-export const isSimpleReceivedRequest = o => {
+exports.isSimpleReceivedRequest = o => {
   if (typeof o !== "object") {
     return false;
   }
@@ -232,7 +232,7 @@ export const isSimpleReceivedRequest = o => {
  * @param {any} o
  * @returns {o is HandshakeRequest}
  */
-export const isHandshakeRequest = o => {
+exports.isHandshakeRequest = o => {
   if (typeof o !== "object") {
     return false;
   }
@@ -262,7 +262,7 @@ export const isHandshakeRequest = o => {
  * @param {any} o
  * @returns {o is Message}
  */
-export const isMessage = o => {
+exports.isMessage = o => {
   if (typeof o !== "object") {
     return false;
   }
@@ -280,7 +280,7 @@ export const isMessage = o => {
  * @param {any} o
  * @returns {o is PartialOutgoing}
  */
-export const isPartialOutgoing = o => {
+exports.isPartialOutgoing = o => {
   if (typeof o !== "object") {
     return false;
   }
@@ -299,7 +299,7 @@ export const isPartialOutgoing = o => {
  * @param {any} o
  * @returns {o is Outgoing}
  */
-export const isOutgoing = o => {
+exports.isOutgoing = o => {
   if (typeof o !== "object") {
     return false;
   }

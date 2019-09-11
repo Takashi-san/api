@@ -10,18 +10,18 @@ let shouldMockSea = false;
 let shouldFailAuth = false;
 let shouldFailCreate = false;
 
-export const __shouldMockGun = () => {
+exports.__shouldMockGun = () => {
   return shouldMockGun;
 };
 
-export const __shouldMockSea = () => {
+exports.__shouldMockSea = () => {
   return shouldMockSea;
 };
 
 /**
  * Mock gun.
  */
-export const mockGun = () => {
+exports.mockGun = () => {
   shouldMockGun = true;
 };
 
@@ -30,7 +30,7 @@ export const mockGun = () => {
  * mocking the entirety of gun itself, this switch is not necessary.
  * @throws {Error}
  */
-export const mockSea = () => {
+exports.mockSea = () => {
   if (__shouldMockGun()) {
     throw new Error(
       "Called mockSea() even though already mocking gun itself. This is unnecesary."
@@ -44,7 +44,7 @@ export const mockSea = () => {
  * If mocking SEA. Switching this on makes user authentication fail.
  * @throws {Error}
  */
-export const failAuth = () => {
+exports.failAuth = () => {
   shouldFailAuth = true;
 };
 
@@ -52,11 +52,11 @@ export const failAuth = () => {
  * If mocking SEA. Switching this on makes user creation fail.
  * @throws {Error}
  */
-export const failCreate = () => {
+exports.failCreate = () => {
   shouldFailCreate = true;
 };
 
-export const __MOCK_USER_SUPER_NODE = "$$_MOCK_USER_SUPER_NODE";
+exports.__MOCK_USER_SUPER_NODE = "$$_MOCK_USER_SUPER_NODE";
 
 /**
  * Function which when called will provide an unique public key for the user
@@ -67,10 +67,7 @@ export const __MOCK_USER_SUPER_NODE = "$$_MOCK_USER_SUPER_NODE";
  * @param {(alias: string, pass: string) => string} userPublicKeyProvider
  * @returns {void}
  */
-export const injectSeaMockToGun = (
-  gun,
-  userPublicKeyProvider = alias => alias
-) => {
+exports.injectSeaMockToGun = (gun, userPublicKeyProvider = alias => alias) => {
   /** @type {null|string} */
   let storedPublicKey = null;
 

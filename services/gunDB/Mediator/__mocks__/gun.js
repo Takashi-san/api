@@ -1,6 +1,6 @@
-import { createMockGun } from "../../contact-api/__mocks__/mock-gun.js";
+const { createMockGun } = require("../../contact-api/__mocks__/mock-gun");
 
-import { injectSeaMockToGun } from "../../contact-api/testing.js";
+const { injectSeaMockToGun } = require("../../contact-api/testing");
 
 const Gun = () => {
   const gun = createMockGun();
@@ -10,4 +10,4 @@ const Gun = () => {
   return gun;
 };
 
-export default Gun;
+module.exports = Gun;

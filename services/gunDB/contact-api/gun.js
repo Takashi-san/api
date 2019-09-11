@@ -1,7 +1,7 @@
 /** @prettier */
-import * as Testing from "./testing.js";
+const Testing = require("./testing");
 
-import Gun from "gun/gun.js";
+const Gun = require("gun/gun");
 
 // @ts-ignore
 const runningInJest = process.env.JEST_WORKER_ID !== undefined;
@@ -13,14 +13,14 @@ if (runningInJest) {
 /**
  * @type {import('./SimpleGUN').GUNNode}
  */
-export let gun;
+exports.gun = null;
 
 /**
  * @type {import('./SimpleGUN').UserGUNNode}
  */
-export let user;
+exports.user = null;
 
-export const setupGun = () => {
+exports.setupGun = () => {
   if (Testing.__shouldMockGun()) {
     // @ts-ignore Let it crash if actually trying to access fow
     gun = null;

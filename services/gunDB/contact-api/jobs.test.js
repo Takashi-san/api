@@ -1,11 +1,11 @@
 /**
  * @prettier
  */
-import * as Events from "./events.js";
-import * as Jobs from "./jobs.js";
-import * as Key from "./key.js";
-import * as Testing from "./testing.js";
-import { createMockGun } from "./__mocks__/mock-gun.js";
+const Events = require("./events");
+const Jobs = require("./jobs");
+const Key = require("./key");
+const Testing = require("./testing");
+const { createMockGun } = require("./__mocks__/mock-gun");
 
 describe("__onAcceptedRequests()", () => {
   it("throws a NOT_AUTH error if supplied with a non authenticated node", () => {

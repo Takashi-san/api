@@ -1,11 +1,11 @@
 /**
  * @prettier
  */
-import * as ErrorCode from "./errorCode.js";
-import * as Key from "./key.js";
-import { gun as origGun, user as userGun } from "./gun.js";
-import * as Schema from "./schema.js";
-import uniqBy from "lodash/uniqBy.js";
+const ErrorCode = require("./errorCode");
+const Key = require("./key");
+const { gun: origGun, user: userGun } = require("./gun");
+const Schema = require("./schema");
+const uniqBy = require("lodash/uniqBy");
 /**
  * @typedef {import('./SimpleGUN').UserGUNNode} UserGUNNode
  * @typedef {import('./SimpleGUN').GUNNode} GUNNode
@@ -49,7 +49,7 @@ const __onOutgoingMessage = (outgoingKey, cb, user) => {
  * @param {UserGUNNode=} user Pass only for testing purposes.
  * @returns {void}
  */
-export const __onSentRequestToUser = (cb, user = userGun) => {
+exports.__onSentRequestToUser = (cb, user = userGun) => {
   /** @type {Record<string, string>} */
   const requestToUser = {};
 
@@ -82,7 +82,7 @@ export const __onSentRequestToUser = (cb, user = userGun) => {
  * @param {UserGUNNode=} user Pass only for testing purposes.
  * @returns {void}
  */
-export const __onUserToIncoming = (cb, user = userGun) => {
+exports.__onUserToIncoming = (cb, user = userGun) => {
   /** @type {Record<string, string>} */
   const userToOutgoing = {};
 
@@ -112,7 +112,7 @@ export const __onUserToIncoming = (cb, user = userGun) => {
  * @throws {Error} If user hasn't been auth.
  * @returns {void}
  */
-export const onAvatar = (cb, user = userGun) => {
+exports.onAvatar = (cb, user = userGun) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -136,7 +136,7 @@ export const onAvatar = (cb, user = userGun) => {
  * @param {UserGUNNode} user
  * @returns {void}
  */
-export const onBlacklist = (cb, user = userGun) => {
+exports.onBlacklist = (cb, user = userGun) => {
   /** @type {string[]} */
   const blacklist = [];
 
@@ -165,7 +165,7 @@ export const onBlacklist = (cb, user = userGun) => {
  * @param {UserGUNNode=} user
  * @returns {void}
  */
-export const onCurrentHandshakeAddress = (cb, user = userGun) => {
+exports.onCurrentHandshakeAddress = (cb, user = userGun) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -192,7 +192,7 @@ export const onCurrentHandshakeAddress = (cb, user = userGun) => {
  * @param {UserGUNNode=} user Pass only for testing purposes.
  * @returns {void}
  */
-export const onCurrentHandshakeNode = (cb, user = userGun) => {
+exports.onCurrentHandshakeNode = (cb, user = userGun) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -227,7 +227,7 @@ export const onCurrentHandshakeNode = (cb, user = userGun) => {
  * @throws {Error} If user hasn't been auth.
  * @returns {void}
  */
-export const onDisplayName = (cb, user = userGun) => {
+exports.onDisplayName = (cb, user = userGun) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -255,7 +255,7 @@ export const onDisplayName = (cb, user = userGun) => {
  * @param {GUNNode=} gun (Pass only for testing purposes)
  * @returns {void}
  */
-export const onIncomingMessages = (
+exports.onIncomingMessages = (
   cb,
   userPK,
   outgoingFeedID,
@@ -293,7 +293,7 @@ export const onIncomingMessages = (
  * @param {UserGUNNode} user
  * @param {typeof __onOutgoingMessage} onOutgoingMessage
  */
-export const onOutgoing = (
+exports.onOutgoing = (
   cb,
   user = userGun,
   onOutgoingMessage = __onOutgoingMessage
@@ -354,7 +354,7 @@ export const onOutgoing = (
  * @param {UserGUNNode=} user Pass only for testing purposes.
  * @returns {void}
  */
-export const onSentRequests = (cb, user = userGun) => {
+exports.onSentRequests = (cb, user = userGun) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -388,7 +388,7 @@ export const onSentRequests = (cb, user = userGun) => {
  * @param {UserGUNNode} user
  * @returns {void}
  */
-export const onChats = (cb, gun = origGun, user = userGun) => {
+exports.onChats = (cb, gun = origGun, user = userGun) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -544,7 +544,7 @@ export const onChats = (cb, gun = origGun, user = userGun) => {
  * @param {UserGUNNode} user
  * @returns {void}
  */
-export const onSimplerReceivedRequests = (
+exports.onSimplerReceivedRequests = (
   cb,
   gun = origGun,
   user = userGun
@@ -662,7 +662,7 @@ export const onSimplerReceivedRequests = (
  * @param {UserGUNNode} user
  * @returns {void}
  */
-export const onSimplerSentRequests = (cb, gun = origGun, user = userGun) => {
+exports.onSimplerSentRequests = (cb, gun = origGun, user = userGun) => {
   /**
    * @type {Record<string, Omit<SimpleSentRequest, 'timestamp'> & { timestamp?: undefined|number}>}
    **/

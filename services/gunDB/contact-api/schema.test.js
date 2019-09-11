@@ -1,7 +1,7 @@
 /**
  * @prettier
  */
-import * as Schema from "./schema.js";
+const Schema = require("./schema");
 /**
  * @typedef {import('./schema').HandshakeRequest} HandshakeRequest
  * @typedef {import('./schema').Message} Message

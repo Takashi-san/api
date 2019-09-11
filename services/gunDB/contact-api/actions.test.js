@@ -2,12 +2,12 @@
  * @prettier
  */
 
-import * as Actions from "./actions";
-import * as ErrorCode from "./errorCode";
-import * as Events from "./events";
-import * as Jobs from "./jobs";
-import * as Key from "./key";
-import * as Testing from "./testing";
+import Actions from "./actions";
+import ErrorCode from "./errorCode";
+import Events from "./events";
+import Jobs from "./jobs";
+import Key from "./key";
+import Testing from "./testing";
 import { createMockGun } from "./__mocks__/mock-gun";
 
 /**
