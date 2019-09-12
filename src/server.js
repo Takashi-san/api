@@ -67,7 +67,8 @@ const server = async program => {
         GET: {
           "/healthz": true,
           "/ping": true,
-          "/api/lnd/connect": true
+          "/api/lnd/connect": true,
+          "/api/lnd/auth": true
         },
         POST: {
           "/api/lnd/connect": true,
