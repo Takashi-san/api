@@ -72,7 +72,8 @@ const server = async program => {
         },
         POST: {
           "/api/lnd/connect": true,
-          "/api/lnd/wallet": true
+          "/api/lnd/wallet": true,
+          "/api/lnd/auth": true
         },
         PUT: {},
         DELETE: {}
