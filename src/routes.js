@@ -79,6 +79,21 @@ module.exports = (
     }
   };
 
+  const unlockWallet = password =>
+    new Promise((resolve, reject) => {
+      const args = {
+        wallet_password: Buffer.from(password, "utf-8")
+      };
+      walletUnlocker.unlockWallet(args, function(unlockErr, unlockResponse) {
+        if (unlockErr) {
+          reject(unlockErr);
+          return;
+        }
+
+        resolve(unlockResponse);
+      });
+    });
+
   app.use(["/ping"], responseTime());
 
   /**
@@ -112,24 +127,43 @@ module.exports = (
     res.json({ msg: OK });
   });
 
-  app.get("/api/lnd/auth", (req, res) => {
-    checkHealth().then(healthResponse => {
-      // IF WE ARE CONNECTED TO LND THEN RETURN AN AUTH TOKEN.
-      if (healthResponse.connectedToLnd) {
-        auth.generateToken().then(token => {
-          res.json({
-            authorization: token
-          });
+  app.get("/api/lnd/auth", async (req, res) => {
+    try {
+      const health = await checkHealth();
+      // If we're connected to lnd, unlock the wallet using the password supplied
+      // and generate an auth token if that operation was successful.
+      if (health.LNDStatus.success) {
+        const { password } = req.body;
+
+        await recreateLnServices();
+        await unlockWallet(password);
+
+        // Send an event to update lightning's status
+        mySocketsEvents.emit("updateLightning");
+
+        // Generate auth token and send it as a JSON response
+        const token = await auth.generateToken();
+        res.json({
+          authorization: token
         });
+
+        return true;
       } else {
         res.status(500);
-        res.send({ errorMessage: "LND is down" });
+        res.send({ errorMessage: "LND is down", success: false });
+        return false;
       }
-    });
+    } catch (err) {
+      logger.debug("Unlock Error:", err);
+      res.status(400);
+      res.send({ errorMessage: err.message });
+    }
   });
 
   let recreateLnServices = async (callback, cs) => {
-    cs();
+    if (cs) {
+      cs();
+    }
 
     let lnServices = await require("../services/lnd/lightning")(
       lnServicesData.lndProto,
@@ -145,7 +179,7 @@ module.exports = (
         callback();
       }, 3000);
     }
-    return;
+    return true;
   };
 
   app.post("/api/lnd/connect", (req, res) => {

@@ -52,7 +52,7 @@ exports.getTokenForAlias = alias => {
  */
 exports.getUserForAlias = alias => {
   if (!aliasToUser[alias]) {
-    aliasToUser[alias] = createGun().user();
+    aliasToUser[alias] = exports.createGun().user();
 
     const userNode = aliasToUser[alias];
 
@@ -83,7 +83,7 @@ exports.getUserForAlias = alias => {
     userNode.leave = () => {
       oldLeave();
 
-      const token = getTokenForAlias(alias);
+      const token = exports.getTokenForAlias(alias);
 
       if (token === null) {
         throw new TypeError();
@@ -109,5 +109,5 @@ exports.getUserForToken = token => {
 
   const alias = tokenToAlias[token];
 
-  return getUserForAlias(alias);
+  return exports.getUserForAlias(alias);
 };
