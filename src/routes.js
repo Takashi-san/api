@@ -33,7 +33,7 @@ module.exports = (
       lightning.getInfo({}, async (err, response) => {
         const LNDStatus = {
           message: err ? err.details : "Success",
-          success: !!err
+          success: !err
         };
         try {
           const APIHealth = await Http.get(
