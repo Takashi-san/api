@@ -255,12 +255,7 @@ exports.onDisplayName = (cb, user = userGun) => {
  * @param {GUNNode=} gun (Pass only for testing purposes)
  * @returns {void}
  */
-exports.onIncomingMessages = (
-  cb,
-  userPK,
-  outgoingFeedID,
-  gun = origGun
-) => {
+exports.onIncomingMessages = (cb, userPK, outgoingFeedID, gun = origGun) => {
   const user = gun.user(userPK);
 
   /**
@@ -435,7 +430,7 @@ exports.onChats = (cb, gun = origGun, user = userGun) => {
 
   callCB();
 
-  onOutgoing(outgoings => {
+  exports.onOutgoing(outgoings => {
     for (const outgoing of Object.values(outgoings)) {
       const recipientPK = outgoing.with;
 
@@ -465,7 +460,7 @@ exports.onChats = (cb, gun = origGun, user = userGun) => {
     callCB();
   }, user);
 
-  __onUserToIncoming(uti => {
+  exports.__onUserToIncoming(uti => {
     for (const [recipientPK, incomingFeedID] of Object.entries(uti)) {
       if (!recipientPKToChat[recipientPK]) {
         recipientPKToChat[recipientPK] = {
@@ -481,7 +476,7 @@ exports.onChats = (cb, gun = origGun, user = userGun) => {
       if (!usersWithIncomingListeners.includes(recipientPK)) {
         usersWithIncomingListeners.push(recipientPK);
 
-        onIncomingMessages(
+        exports.onIncomingMessages(
           msgs => {
             for (const [msgK, msg] of Object.entries(msgs)) {
               const messages = chat.messages;
@@ -544,11 +539,7 @@ exports.onChats = (cb, gun = origGun, user = userGun) => {
  * @param {UserGUNNode} user
  * @returns {void}
  */
-exports.onSimplerReceivedRequests = (
-  cb,
-  gun = origGun,
-  user = userGun
-) => {
+exports.onSimplerReceivedRequests = (cb, gun = origGun, user = userGun) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -728,7 +719,7 @@ exports.onSimplerSentRequests = (cb, gun = origGun, user = userGun) => {
       callCB();
     });
 
-  __onSentRequestToUser(srtu => {
+  exports.__onSentRequestToUser(srtu => {
     for (const [sentRequestID, recipientPK] of Object.entries(srtu)) {
       if (!idToPartialSimpleSentRequest[sentRequestID]) {
         idToPartialSimpleSentRequest[sentRequestID] = {

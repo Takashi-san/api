@@ -102,7 +102,7 @@ exports.isChat = o => {
     return false;
   }
 
-  return obj.messages.every(item => isChatMessage(item));
+  return obj.messages.every(item => exports.isChatMessage(item));
 };
 
 /**

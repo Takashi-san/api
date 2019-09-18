@@ -33,6 +33,6 @@ exports.setupGun = () => {
       Testing.injectSeaMockToGun(gun);
     }
 
-    user = gun.user();
+    exports.user = exports.gun.user();
   }
 };
