@@ -13,7 +13,6 @@
 const ErrorCode = require("./errorCode");
 const Events = require("./events");
 const Key = require("./key");
-const { user: userGun } = require("./gun");
 
 /**
  * @typedef {import('./SimpleGUN').GUNNode} GUNNode
@@ -29,11 +28,11 @@ const { user: userGun } = require("./gun");
  * @param {((osr: OnSentRequest, user: UserGUNNode) => void)=} onSentRequestsFactory
  * Pass only for testing purposes.
  * @throws {Error} NOT_AUTH
- * @param {UserGUNNode=} user Pass only for testing purposes.
+ * @param {UserGUNNode} user Pass only for testing purposes.
  */
 exports.onAcceptedRequests = (
   onSentRequestsFactory = Events.onSentRequests,
-  user = userGun
+  user
 ) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);

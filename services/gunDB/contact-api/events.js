@@ -3,7 +3,6 @@
  */
 const ErrorCode = require("./errorCode");
 const Key = require("./key");
-const { gun: origGun, user: userGun } = require("./gun");
 const Schema = require("./schema");
 const uniqBy = require("lodash/uniqBy");
 /**

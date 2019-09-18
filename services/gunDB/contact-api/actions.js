@@ -3,7 +3,6 @@
  */
 const ErrorCode = require("./errorCode");
 const Key = require("./key");
-const { gun: mainGun, user: userGun } = require("./gun");
 const { isHandshakeRequest } = require("./schema");
 /**
  * @typedef {import('./SimpleGUN').GUNNode} GUNNode
@@ -145,7 +144,7 @@ exports.__createOutgoingFeed = (withPublicKey, user) =>
  * requestor, then encrypting and putting the id of this newly created outgoing
  * feed on the response prop of the request.
  * @param {string} requestID The id for the request to accept.
- * @param {UserGUNNode=} user Pass only for testing purposes.
+ * @param {UserGUNNode} user Pass only for testing purposes.
  * @param {typeof exports.__createOutgoingFeed} outgoingFeedCreator Pass only
  * for testing. purposes.
  * @param {typeof exports.__encryptAndPutResponseToRequest}
@@ -156,7 +155,7 @@ exports.__createOutgoingFeed = (withPublicKey, user) =>
  */
 exports.acceptRequest = (
   requestID,
-  user = userGun,
+  user,
   outgoingFeedCreator = exports.__createOutgoingFeed,
   responseToRequestEncryptorAndPutter = exports.__encryptAndPutResponseToRequest
 ) =>
@@ -238,7 +237,7 @@ exports.acceptRequest = (
  * @param {string} pass
  * @param {UserGUNNode} userNode
  */
-exports.authenticate = (user, pass, userNode = userGun) =>
+exports.authenticate = (user, pass, userNode) =>
   new Promise((resolve, reject) => {
     if (typeof user !== "string") {
       throw new TypeError("expected user to be of type string");
@@ -273,11 +272,11 @@ exports.authenticate = (user, pass, userNode = userGun) =>
 
 /**
  * @param {string} publicKey
- * @param {UserGUNNode=} user Pass only for testing.
+ * @param {UserGUNNode} user Pass only for testing.
  * @throws {Error} If there's an error saving to the blacklist.
  * @returns {Promise<void>}
  */
-exports.blacklist = (publicKey, user = userGun) =>
+exports.blacklist = (publicKey, user) =>
   new Promise((resolve, reject) => {
     if (!user.is) {
       throw new Error(ErrorCode.NOT_AUTH);
@@ -293,12 +292,12 @@ exports.blacklist = (publicKey, user = userGun) =>
   });
 
 /**
- * @param {GUNNode=} gun
- * @param {UserGUNNode=} user
+ * @param {GUNNode} gun
+ * @param {UserGUNNode} user
  * @throws {TypeError}
  * @returns {Promise<void>}
  */
-exports.generateNewHandshakeNode = (gun = mainGun, user = userGun) =>
+exports.generateNewHandshakeNode = (gun, user) =>
   new Promise((resolve, reject) => {
     if (!user.is) {
       throw new Error(ErrorCode.NOT_AUTH);
@@ -327,7 +326,7 @@ exports.generateNewHandshakeNode = (gun = mainGun, user = userGun) =>
  * @throws {Error} UNSUCCESSFUL_LOGOUT
  * @returns {Promise<void>}
  */
-exports.logout = (user = userGun) => {
+exports.logout = user => {
   if (!user.is) {
     return Promise.reject(new Error(ErrorCode.NOT_AUTH));
   }
@@ -350,7 +349,7 @@ exports.logout = (user = userGun) => {
  * @param {UserGUNNode} user
  * @returns {Promise<void>}
  */
-exports.register = (alias, pass, user = userGun) =>
+exports.register = (alias, pass, user) =>
   new Promise((resolve, reject) => {
     const u = /** @type {UserGUNNode} */ (user);
 
@@ -383,6 +382,7 @@ exports.register = (alias, pass, user = userGun) =>
  * Sends a handshake to the
  * @param {string} handshakeAddress
  * @param {string} recipientPublicKey
+ * @param {GUNNode} gun
  * @param {UserGUNNode} user
  * @throws {Error|TypeError}
  * @returns {Promise<void>}
@@ -390,8 +390,8 @@ exports.register = (alias, pass, user = userGun) =>
 exports.sendHandshakeRequest = (
   handshakeAddress,
   recipientPublicKey,
-  gun = mainGun,
-  user = userGun
+  gun,
+  user
 ) =>
   new Promise((resolve, reject) => {
     if (!user.is) {
@@ -562,7 +562,7 @@ exports.sendMessage = (recipientPublicKey, body, user) => {
  * @throws {TypeError} Rejects if avatar is not an string or an empty string.
  * @returns {Promise<void>}
  */
-exports.setAvatar = (avatar, user = userGun) =>
+exports.setAvatar = (avatar, user) =>
   new Promise((resolve, reject) => {
     if (!user.is) {
       throw new Error(ErrorCode.NOT_AUTH);
@@ -599,7 +599,7 @@ exports.setAvatar = (avatar, user = userGun) =>
  * string.
  * @returns {Promise<void>}
  */
-exports.setDisplayName = (displayName, user = userGun) =>
+exports.setDisplayName = (displayName, user) =>
   new Promise((resolve, reject) => {
     if (!user.is) {
       throw new Error(ErrorCode.NOT_AUTH);
