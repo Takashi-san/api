@@ -31,7 +31,7 @@ exports.mockGun = () => {
  * @throws {Error}
  */
 exports.mockSea = () => {
-  if (__shouldMockGun()) {
+  if (exports.__shouldMockGun()) {
     throw new Error(
       "Called mockSea() even though already mocking gun itself. This is unnecesary."
     );
@@ -77,7 +77,7 @@ exports.injectSeaMockToGun = (gun, userPublicKeyProvider = alias => alias) => {
   // @ts-ignore
   gun.user = publicKey => {
     if (publicKey) {
-      const node = gun.get(__MOCK_USER_SUPER_NODE).get(publicKey);
+      const node = gun.get(exports.__MOCK_USER_SUPER_NODE).get(publicKey);
 
       node.put = () => {
         throw new Error();
@@ -134,7 +134,7 @@ exports.injectSeaMockToGun = (gun, userPublicKeyProvider = alias => alias) => {
         }
 
         return gun
-          .get(__MOCK_USER_SUPER_NODE)
+          .get(exports.__MOCK_USER_SUPER_NODE)
           .get(storedPublicKey)
           .get(key);
       },
