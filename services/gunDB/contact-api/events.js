@@ -45,10 +45,10 @@ const __onOutgoingMessage = (outgoingKey, cb, user) => {
 /**
  * Maps a sent request ID to the public key of the user it was sent to.
  * @param {(requestToUser: Record<string, string>) => void} cb
- * @param {UserGUNNode=} user Pass only for testing purposes.
+ * @param {UserGUNNode} user Pass only for testing purposes.
  * @returns {void}
  */
-exports.__onSentRequestToUser = (cb, user = userGun) => {
+exports.__onSentRequestToUser = (cb, user) => {
   /** @type {Record<string, string>} */
   const requestToUser = {};
 
@@ -78,10 +78,10 @@ exports.__onSentRequestToUser = (cb, user = userGun) => {
 
 /**
  * @param {(userToOutgoing: Record<string, string>) => void} cb
- * @param {UserGUNNode=} user Pass only for testing purposes.
+ * @param {UserGUNNode} user Pass only for testing purposes.
  * @returns {void}
  */
-exports.__onUserToIncoming = (cb, user = userGun) => {
+exports.__onUserToIncoming = (cb, user) => {
   /** @type {Record<string, string>} */
   const userToOutgoing = {};
 
@@ -107,11 +107,11 @@ exports.__onUserToIncoming = (cb, user = userGun) => {
 
 /**
  * @param {(avatar: string|null) => void} cb
- * @param {UserGUNNode=} user Pass only for testing purposes.
+ * @param {UserGUNNode} user Pass only for testing purposes.
  * @throws {Error} If user hasn't been auth.
  * @returns {void}
  */
-exports.onAvatar = (cb, user = userGun) => {
+exports.onAvatar = (cb, user) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -135,7 +135,7 @@ exports.onAvatar = (cb, user = userGun) => {
  * @param {UserGUNNode} user
  * @returns {void}
  */
-exports.onBlacklist = (cb, user = userGun) => {
+exports.onBlacklist = (cb, user) => {
   /** @type {string[]} */
   const blacklist = [];
 
@@ -161,10 +161,10 @@ exports.onBlacklist = (cb, user = userGun) => {
 
 /**
  * @param {(currentHandshakeAddress: string|null) => void} cb
- * @param {UserGUNNode=} user
+ * @param {UserGUNNode} user
  * @returns {void}
  */
-exports.onCurrentHandshakeAddress = (cb, user = userGun) => {
+exports.onCurrentHandshakeAddress = (cb, user) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -188,10 +188,10 @@ exports.onCurrentHandshakeAddress = (cb, user = userGun) => {
 
 /**
  * @param {(currentHandshakeNode: Record<string, HandshakeRequest>|null) => void} cb
- * @param {UserGUNNode=} user Pass only for testing purposes.
+ * @param {UserGUNNode} user Pass only for testing purposes.
  * @returns {void}
  */
-exports.onCurrentHandshakeNode = (cb, user = userGun) => {
+exports.onCurrentHandshakeNode = (cb, user) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -222,11 +222,11 @@ exports.onCurrentHandshakeNode = (cb, user = userGun) => {
 
 /**
  * @param {(displayName: string|null) => void} cb
- * @param {UserGUNNode=} user Pass only for testing purposes.
+ * @param {UserGUNNode} user Pass only for testing purposes.
  * @throws {Error} If user hasn't been auth.
  * @returns {void}
  */
-exports.onDisplayName = (cb, user = userGun) => {
+exports.onDisplayName = (cb, user) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -251,10 +251,10 @@ exports.onDisplayName = (cb, user = userGun) => {
  * messages will be obtained.
  * @param {string} outgoingFeedID ID of the outgoing feed from which the
  * incoming messages will be obtained.
- * @param {GUNNode=} gun (Pass only for testing purposes)
+ * @param {GUNNode} gun (Pass only for testing purposes)
  * @returns {void}
  */
-exports.onIncomingMessages = (cb, userPK, outgoingFeedID, gun = origGun) => {
+exports.onIncomingMessages = (cb, userPK, outgoingFeedID, gun) => {
   const user = gun.user(userPK);
 
   /**
@@ -287,11 +287,7 @@ exports.onIncomingMessages = (cb, userPK, outgoingFeedID, gun = origGun) => {
  * @param {UserGUNNode} user
  * @param {typeof __onOutgoingMessage} onOutgoingMessage
  */
-exports.onOutgoing = (
-  cb,
-  user = userGun,
-  onOutgoingMessage = __onOutgoingMessage
-) => {
+exports.onOutgoing = (cb, user, onOutgoingMessage = __onOutgoingMessage) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -345,10 +341,10 @@ exports.onOutgoing = (
 
 /**
  * @param {(sentRequests: Record<string, HandshakeRequest>) => void} cb
- * @param {UserGUNNode=} user Pass only for testing purposes.
+ * @param {UserGUNNode} user Pass only for testing purposes.
  * @returns {void}
  */
-exports.onSentRequests = (cb, user = userGun) => {
+exports.onSentRequests = (cb, user) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -382,7 +378,7 @@ exports.onSentRequests = (cb, user = userGun) => {
  * @param {UserGUNNode} user
  * @returns {void}
  */
-exports.onChats = (cb, gun = origGun, user = userGun) => {
+exports.onChats = (cb, gun, user) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -538,7 +534,7 @@ exports.onChats = (cb, gun = origGun, user = userGun) => {
  * @param {UserGUNNode} user
  * @returns {void}
  */
-exports.onSimplerReceivedRequests = (cb, gun = origGun, user = userGun) => {
+exports.onSimplerReceivedRequests = (cb, gun, user) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -652,7 +648,7 @@ exports.onSimplerReceivedRequests = (cb, gun = origGun, user = userGun) => {
  * @param {UserGUNNode} user
  * @returns {void}
  */
-exports.onSimplerSentRequests = (cb, gun = origGun, user = userGun) => {
+exports.onSimplerSentRequests = (cb, gun, user) => {
   /**
    * @type {Record<string, Omit<SimpleSentRequest, 'timestamp'> & { timestamp?: undefined|number}>}
    **/
