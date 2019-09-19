@@ -42,5 +42,10 @@
     "tingodb": "^0.6.1",
     "winston": "^2.3.1",
     "winston-daily-rotate-file": "^1.4.4"
+  },
+  "devDependencies": {
+    "@types/gun": "^0.9.1",
+    "@types/lodash": "^4.14.138",
+    "@types/uuid": "^3.4.5"
   }
 }
