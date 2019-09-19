@@ -1,6 +1,10 @@
 const Gun = require("gun");
+const debounce = require("lodash/debounce");
+const once = require("lodash/once");
 // @ts-ignore
 require("gun/sea");
+
+const auth = require("../../auth/auth");
 
 const Action = require("../action-constants.js");
 const API = require("../contact-api/index");
@@ -34,6 +38,41 @@ const gun = Gun({
 
 const user = gun.user();
 
+/**
+ * @param {string} token
+ * @returns {Promise<boolean>}
+ */
+const isValidToken = async token => {
+  const validation = await auth.validateToken(token);
+
+  if (typeof validation !== "object") {
+    return false;
+  }
+
+  if (validation === null) {
+    return false;
+  }
+
+  if (typeof validation.valid !== "boolean") {
+    return false;
+  }
+
+  return validation.valid;
+};
+
+/**
+ * @param {string} token
+ * @throws {Error} If the token is invalid
+ * @returns {Promise<void>}
+ */
+const throwOnInvalidToken = async token => {
+  const isValid = await isValidToken(token);
+
+  if (!isValid) {
+    throw new Error("Token expired.");
+  }
+};
+
 module.exports = class Mediator {
   /**
    * @param {Readonly<SimpleSocket>} socket
@@ -65,105 +104,67 @@ module.exports = class Mediator {
   /**
    * @param {Readonly<{ requestID: string , token: string }>} body
    */
-  acceptRequest = body => {
-    const { requestID, token } = body;
+  acceptRequest = async body => {
+    try {
+      const { requestID, token } = body;
 
-    // TODO: Validate token
+      await throwOnInvalidToken(token);
 
-    if (!token) {
+      await API.Actions.acceptRequest(requestID, user);
+
       this.socket.emit(Action.ACCEPT_REQUEST, {
-        ok: false,
-        msg: "Token expired.",
+        ok: true,
+        msg: null,
         origBody: body
       });
 
-      return;
-    }
-
-    API.Actions.acceptRequest(requestID, user)
-      .then(() => {
-        // TODO: check auth status
-        const connectedAndAuthed = this.connected;
-
-        if (connectedAndAuthed) {
-          this.socket.emit(Action.ACCEPT_REQUEST, {
-            ok: true,
-            msg: null,
-            origBody: body
-          });
-
-          // refresh received requests
-
-          let sent = false;
-
-          API.Events.onSimplerReceivedRequests(
-            receivedRequests => {
-              // TODO: check auth status
-              const connectedAndAuthed = this.connected;
-
-              if (connectedAndAuthed && !sent) {
-                sent = true;
-
-                this.socket.emit(Event.ON_RECEIVED_REQUESTS, {
-                  msg: receivedRequests,
-                  ok: true,
-                  origBody: { token }
-                });
-              }
-            },
-            gun,
-            user
-          );
-        }
-      })
-      .catch(e => {
-        if (this.connected) {
-          this.socket.emit(Action.ACCEPT_REQUEST, {
-            ok: false,
-            msg: e.message,
-            origBody: body
-          });
-        }
+      // refresh received requests
+      API.Events.onSimplerReceivedRequests(
+        debounce(
+          once(async receivedRequests => {
+            this.socket.emit(Event.ON_RECEIVED_REQUESTS, {
+              msg: receivedRequests,
+              ok: true,
+              origBody: body
+            });
+          }),
+          300
+        ),
+        gun,
+        user
+      );
+    } catch (e) {
+      this.socket.emit(Action.ACCEPT_REQUEST, {
+        ok: false,
+        msg: e.message,
+        origBody: body
       });
+    }
   };
 
   /**
    * @param {Readonly<{ publicKey: string , token: string }>} body
    */
-  blacklist = body => {
-    const { publicKey, token } = body;
+  blacklist = async body => {
+    try {
+      const { publicKey, token } = body;
 
-    // TODO: Validate token
+      await throwOnInvalidToken(token);
 
-    if (!token) {
+      await API.Actions.blacklist(publicKey, user);
+
       this.socket.emit(Action.BLACKLIST, {
-        ok: false,
-        msg: "Token expired.",
+        ok: true,
+        msg: null,
         origBody: body
       });
-
-      return;
-    }
-
-    API.Actions.blacklist(publicKey, user)
-      .then(() => {
-        if (this.connected) {
-          this.socket.emit(Action.BLACKLIST, {
-            ok: true,
-            msg: null,
-            origBody: body
-          });
-        }
-      })
-      .catch(e => {
-        if (this.connected) {
-          this.socket.emit(Action.BLACKLIST, {
-            ok: false,
-            msg: e.message,
-            origBody: body
-          });
-        }
+    } catch (e) {
+      this.socket.emit(Action.BLACKLIST, {
+        ok: false,
+        msg: e.message,
+        origBody: body
       });
+    }
   };
 
   onDisconnect = () => {
@@ -173,201 +174,131 @@ module.exports = class Mediator {
   /**
    * @param {Readonly<{ token: string }>} body
    */
-  generateHandshakeNode = body => {
-    const { token } = body;
-    // TODO: Validate token
+  generateHandshakeNode = async body => {
+    try {
+      const { token } = body;
 
-    if (!token) {
+      await throwOnInvalidToken(token);
+
+      await API.Actions.generateNewHandshakeNode(gun, user);
+
       this.socket.emit(Action.GENERATE_NEW_HANDSHAKE_NODE, {
-        ok: false,
-        msg: "Token expired.",
+        ok: true,
+        msg: null,
         origBody: body
       });
-
-      return;
-    }
-
-    API.Actions.generateNewHandshakeNode(gun, user)
-      .then(() => {
-        if (this.connected) {
-          this.socket.emit(Action.GENERATE_NEW_HANDSHAKE_NODE, {
-            ok: true,
-            msg: null,
-            origBody: body
-          });
-        }
-      })
-      .catch(e => {
-        if (this.connected) {
-          this.socket.emit(Action.GENERATE_NEW_HANDSHAKE_NODE, {
-            ok: true,
-            msg: e.message,
-            origBody: body
-          });
-        }
+    } catch (e) {
+      this.socket.emit(Action.GENERATE_NEW_HANDSHAKE_NODE, {
+        ok: false,
+        msg: e.message,
+        origBody: body
       });
+    }
   };
 
   /**
    * @param {Readonly<{ handshakeAddress: string , recipientPublicKey: string , token: string }>} body
    */
-  sendHandshakeRequest = body => {
-    const { handshakeAddress, recipientPublicKey, token } = body;
-    // TODO: Validate token
+  sendHandshakeRequest = async body => {
+    try {
+      const { handshakeAddress, recipientPublicKey, token } = body;
 
-    if (!token) {
+      await throwOnInvalidToken(token);
+
+      await API.Actions.sendHandshakeRequest(
+        handshakeAddress,
+        recipientPublicKey,
+        gun,
+        user
+      );
+
       this.socket.emit(Action.SEMD_HANDSHAKE_REQUEST, {
-        ok: false,
-        msg: "Token expired.",
+        ok: true,
+        msg: null,
         origBody: body
       });
-
-      return;
-    }
-
-    console.log(body);
-
-    API.Actions.sendHandshakeRequest(
-      handshakeAddress,
-      recipientPublicKey,
-      gun,
-      user
-    )
-      .then(() => {
-        if (this.connected) {
-          this.socket.emit(Action.SEMD_HANDSHAKE_REQUEST, {
-            ok: true,
-            msg: null,
-            origBody: body
-          });
-        }
-      })
-      .catch(e => {
-        if (this.connected) {
-          this.socket.emit(Action.SEMD_HANDSHAKE_REQUEST, {
-            ok: false,
-            msg: e.message,
-            origBody: body
-          });
-        }
+    } catch (e) {
+      this.socket.emit(Action.SEMD_HANDSHAKE_REQUEST, {
+        ok: false,
+        msg: e.message,
+        origBody: body
       });
+    }
   };
 
   /**
    * @param {Readonly<{ body: string , recipientPublicKey: string , token: string }>} reqBody
    */
-  sendMessage = reqBody => {
-    const { body, recipientPublicKey, token } = reqBody;
-    // TODO: Validate token
+  sendMessage = async reqBody => {
+    try {
+      const { body, recipientPublicKey, token } = reqBody;
 
-    if (!token) {
+      await throwOnInvalidToken(token);
+
+      await API.Actions.sendMessage(recipientPublicKey, body, user);
+
       this.socket.emit(Action.SEND_MESSAGE, {
-        ok: false,
-        msg: "Token expired.",
+        ok: true,
+        msg: null,
         origBody: reqBody
       });
-
-      return;
-    }
-
-    console.log(`sendMessage ReqBody: ${JSON.stringify(reqBody)}`);
-
-    API.Actions.sendMessage(recipientPublicKey, body, user)
-      .then(() => {
-        if (this.connected) {
-          this.socket.emit(Action.SEND_MESSAGE, {
-            ok: true,
-            msg: null,
-            origBody: reqBody
-          });
-        }
-      })
-      .catch(e => {
-        console.error(e);
-        if (this.connected) {
-          this.socket.emit(Action.SEND_MESSAGE, {
-            ok: false,
-            msg: e.message,
-            origBody: reqBody
-          });
-        }
+    } catch (e) {
+      this.socket.emit(Action.SEND_MESSAGE, {
+        ok: false,
+        msg: e.message,
+        origBody: reqBody
       });
+    }
   };
 
   /**
    * @param {Readonly<{ avatar: string|null , token: string }>} body
    */
-  setAvatar = body => {
-    const { avatar, token } = body;
-    // TODO: Validate token
+  setAvatar = async body => {
+    try {
+      const { avatar, token } = body;
 
-    if (!token) {
+      await throwOnInvalidToken(token);
+
+      await API.Actions.setAvatar(avatar, user);
+
       this.socket.emit(Action.SET_AVATAR, {
-        ok: false,
-        msg: "Token expired.",
+        ok: true,
+        msg: null,
         origBody: body
       });
-
-      return;
-    }
-
-    API.Actions.setAvatar(avatar, user)
-      .then(() => {
-        if (this.connected) {
-          this.socket.emit(Action.SET_AVATAR, {
-            ok: true,
-            msg: null,
-            origBody: body
-          });
-        }
-      })
-      .catch(e => {
-        if (this.connected) {
-          this.socket.emit(Action.SET_AVATAR, {
-            ok: false,
-            msg: e.message,
-            origBody: body
-          });
-        }
+    } catch (e) {
+      this.socket.emit(Action.SET_AVATAR, {
+        ok: false,
+        msg: e.message,
+        origBody: body
       });
+    }
   };
 
   /**
    * @param {Readonly<{ displayName: string , token: string }>} body
    */
-  setDisplayName = body => {
-    const { displayName, token } = body;
-    // TODO: Validate token
+  setDisplayName = async body => {
+    try {
+      const { displayName, token } = body;
 
-    if (!token) {
+      await throwOnInvalidToken(token);
+
+      await API.Actions.setDisplayName(displayName, user);
+
       this.socket.emit(Action.SET_DISPLAY_NAME, {
-        ok: false,
-        msg: "Token expired.",
+        ok: true,
+        msg: null,
         origBody: body
       });
-
-      return;
-    }
-
-    API.Actions.setDisplayName(displayName, user)
-      .then(() => {
-        if (this.connected) {
-          this.socket.emit(Action.SET_DISPLAY_NAME, {
-            ok: true,
-            msg: null,
-            origBody: body
-          });
-        }
-      })
-      .catch(e => {
-        if (this.connected) {
-          this.socket.emit(Action.SET_DISPLAY_NAME, {
-            ok: false,
-            msg: e.message,
-            origBody: body
-          });
-        }
+    } catch (e) {
+      this.socket.emit(Action.SET_DISPLAY_NAME, {
+        ok: false,
+        msg: e.message,
+        origBody: body
       });
+    }
   };
 
   //////////////////////////////////////////////////////////////////////////////
@@ -375,220 +306,187 @@ module.exports = class Mediator {
   /**
    * @param {Readonly<{ token: string }>} body
    */
-  onAvatar = body => {
-    const { token } = body;
+  onAvatar = async body => {
+    try {
+      const { token } = body;
 
-    // TODO: Validate token
+      await throwOnInvalidToken(token);
 
-    if (!token) {
-      this.socket.emit(Event.ON_AVATAR, {
-        ok: false,
-        msg: "Token expired.",
-        origBody: body
-      });
-
-      return;
-    }
-
-    API.Events.onAvatar(avatar => {
-      if (this.connected && !!token) {
+      API.Events.onAvatar(avatar => {
         this.socket.emit(Event.ON_AVATAR, {
           msg: avatar,
           ok: true,
-          origBody: { token }
+          origBody: body
         });
-      }
-    }, user);
+      }, user);
+    } catch (e) {
+      this.socket.emit(Event.ON_AVATAR, {
+        ok: false,
+        msg: e.message,
+        origBody: body
+      });
+    }
   };
 
   /**
    * @param {Readonly<{ token: string }>} body
    */
-  onBlacklist = body => {
-    const { token } = body;
+  onBlacklist = async body => {
+    try {
+      const { token } = body;
 
-    // TODO: Validate token
+      await throwOnInvalidToken(token);
 
-    if (!token) {
-      this.socket.emit(Event.ON_BLACKLIST, {
-        ok: false,
-        msg: "Token expired.",
-        origBody: body
-      });
-
-      return;
-    }
-
-    API.Events.onBlacklist(blacklist => {
-      // TODO: Validate token
-      if (this.connected && !!token) {
+      API.Events.onBlacklist(blacklist => {
         this.socket.emit(Event.ON_BLACKLIST, {
           msg: blacklist,
           ok: true,
-          origBody: { token }
+          origBody: body
         });
-      }
-    }, user);
+      }, user);
+    } catch (e) {
+      this.socket.emit(Event.ON_BLACKLIST, {
+        ok: false,
+        msg: e.message,
+        origBody: body
+      });
+    }
   };
 
   /**
    * @param {Readonly<{ token: string }>} body
    */
-  onChats = body => {
-    const { token } = body;
+  onChats = async body => {
+    try {
+      const { token } = body;
 
-    // TODO: Validate token
+      await throwOnInvalidToken(token);
 
-    if (!token) {
-      this.socket.emit(Event.ON_CHATS, {
-        ok: false,
-        msg: "Token expired.",
-        origBody: body
-      });
-
-      return;
-    }
-
-    API.Events.onChats(
-      chats => {
-        // TODO: Validate token
-        if (this.connected && !!token) {
+      API.Events.onChats(
+        chats => {
           this.socket.emit(Event.ON_CHATS, {
             msg: chats,
             ok: true,
-            origBody: { token }
+            origBody: body
           });
-        }
-      },
-      gun,
-      user
-    );
+        },
+        gun,
+        user
+      );
+    } catch (e) {
+      this.socket.emit(Event.ON_CHATS, {
+        ok: false,
+        msg: e.message,
+        origBody: body
+      });
+    }
   };
 
   /**
    * @param {Readonly<{ token: string }>} body
    */
-  onDisplayName = body => {
-    const { token } = body;
+  onDisplayName = async body => {
+    try {
+      const { token } = body;
 
-    // TODO: Validate token
+      await throwOnInvalidToken(token);
 
-    if (!token) {
-      this.socket.emit(Event.ON_DISPLAY_NAME, {
-        ok: false,
-        msg: "Token expired.",
-        origBody: body
-      });
-
-      return;
-    }
-
-    API.Events.onDisplayName(displayName => {
-      if (this.connected && !!token) {
+      API.Events.onDisplayName(displayName => {
         this.socket.emit(Event.ON_DISPLAY_NAME, {
           msg: displayName,
           ok: true,
-          origBody: { token }
+          origBody: body
         });
-      }
-    }, user);
+      }, user);
+    } catch (e) {
+      this.socket.emit(Event.ON_DISPLAY_NAME, {
+        ok: false,
+        msg: e.message,
+        origBody: body
+      });
+    }
   };
 
   /**
    * @param {Readonly<{ token: string }>} body
    */
-  onHandshakeAddress = body => {
-    const { token } = body;
+  onHandshakeAddress = async body => {
+    try {
+      const { token } = body;
 
-    // TODO: Validate token
+      await throwOnInvalidToken(token);
 
-    if (!token) {
-      this.socket.emit(Event.ON_HANDSHAKE_ADDRESS, {
-        ok: false,
-        msg: "Token expired.",
-        origBody: body
-      });
-
-      return;
-    }
-
-    API.Events.onCurrentHandshakeAddress(addr => {
-      // TODO: Validate token
-      if (this.connected && !!token) {
+      API.Events.onCurrentHandshakeAddress(addr => {
         this.socket.emit(Event.ON_HANDSHAKE_ADDRESS, {
           ok: true,
           msg: addr,
           origBody: body
         });
-      }
-    }, user);
+      }, user);
+    } catch (e) {
+      this.socket.emit(Event.ON_HANDSHAKE_ADDRESS, {
+        ok: false,
+        msg: e.message,
+        origBody: body
+      });
+    }
   };
 
   /**
    * @param {Readonly<{ token: string }>} body
    */
-  onReceivedRequests = body => {
-    const { token } = body;
+  onReceivedRequests = async body => {
+    try {
+      const { token } = body;
 
-    // TODO: Validate token
+      await throwOnInvalidToken(token);
 
-    if (!token) {
-      this.socket.emit(Event.ON_RECEIVED_REQUESTS, {
-        ok: false,
-        msg: "Token expired.",
-        origBody: body
-      });
-
-      return;
-    }
-
-    API.Events.onSimplerReceivedRequests(
-      receivedRequests => {
-        // TODO: Validate token
-        if (this.connected && !!token) {
+      API.Events.onSimplerReceivedRequests(
+        receivedRequests => {
           this.socket.emit(Event.ON_RECEIVED_REQUESTS, {
             msg: receivedRequests,
             ok: true,
-            origBody: { token }
+            origBody: body
           });
-        }
-      },
-      gun,
-      user
-    );
+        },
+        gun,
+        user
+      );
+    } catch (e) {
+      this.socket.emit(Event.ON_RECEIVED_REQUESTS, {
+        msg: e.message,
+        ok: false,
+        origBody: body
+      });
+    }
   };
 
   /**
    * @param {Readonly<{ token: string }>} body
    */
-  onSentRequests = body => {
-    const { token } = body;
+  onSentRequests = async body => {
+    try {
+      const { token } = body;
 
-    // TODO: Validate token
+      await throwOnInvalidToken(token);
 
-    if (!token) {
-      this.socket.emit(Event.ON_SENT_REQUESTS, {
-        ok: false,
-        msg: "Token expired.",
-        origBody: body
-      });
-
-      return;
-    }
-
-    API.Events.onSimplerSentRequests(
-      sentRequests => {
-        // TODO: Validate token
-        if (this.connected && !!token) {
+      API.Events.onSimplerSentRequests(
+        sentRequests => {
           this.socket.emit(Event.ON_SENT_REQUESTS, {
             msg: sentRequests,
             ok: true,
-            origBody: { token }
+            origBody: body
           });
-        }
-      },
-      gun,
-      user
-    );
+        },
+        gun,
+        user
+      );
+    } catch (e) {
+      this.socket.emit(Event.ON_SENT_REQUESTS, {
+        msg: e.message,
+        ok: false,
+        origBody: body
+      });
+    }
   };
 };
