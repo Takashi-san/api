@@ -73,7 +73,7 @@ const throwOnInvalidToken = async token => {
   }
 };
 
-module.exports = class Mediator {
+class Mediator {
   /**
    * @param {Readonly<SimpleSocket>} socket
    */
@@ -489,4 +489,117 @@ module.exports = class Mediator {
       });
     }
   };
+}
+
+let _isAuthenticating = false;
+let _isRegistering = false;
+
+const isAuthenticated = () => !!user.is;
+const isAuthenticating = () => _isAuthenticating;
+const isRegistering = () => _isRegistering;
+
+/**
+ * Returns a promise containing the public key of the newly created user.
+ * @param {string} alias
+ * @param {string} pass
+ * @returns {Promise<string>}
+ */
+const authenticate = (alias, pass) => {
+  return new Promise((res, rej) => {
+    if (isAuthenticated()) {
+      throw new Error("Cannot re-authenticate.");
+    }
+
+    if (isAuthenticating()) {
+      throw new Error(
+        "Cannot authenticate while another authentication attempt is going on"
+      );
+    }
+
+    _isAuthenticating = true;
+
+    user.auth(alias, pass, ack => {
+      _isAuthenticating = false;
+
+      if (typeof ack !== "object" || ack === null) {
+        rej(new Error("Unknown error."));
+        return;
+      }
+
+      if (typeof ack.err === "string") {
+        rej(new Error(ack.err));
+      } else if (typeof ack.sea === "object") {
+        res(ack.sea.pub);
+      } else {
+        rej(new Error("Unknown error."));
+      }
+    });
+  });
+};
+
+/**
+ * Creates an user for gun. Returns a promise containing the public key of the
+ * newly created user.
+ * @param {string} alias
+ * @param {string} pass
+ * @throws {Error} If gun is authenticated or is in the process of
+ * authenticating. Use `isAuthenticating()` and `isAuthenticated()` to check for
+ * this first.
+ * @returns {Promise<string>}
+ */
+const register = (alias, pass) =>
+  new Promise((res, rej) => {
+    if (isRegistering()) {
+      throw new Error("Already registering.");
+    }
+
+    if (isAuthenticating()) {
+      throw new Error(
+        "Cannot register while gun is being authenticated (reminder: there should only be one user created for each node)."
+      );
+    }
+
+    if (isAuthenticated()) {
+      throw new Error(
+        "Cannot register if gun is already authenticated (reminder: there should only be one user created for each node)."
+      );
+    }
+
+    _isRegistering = true;
+
+    user.create(alias, pass, ack => {
+      _isRegistering = false;
+
+      if (typeof ack.err === "string") {
+        rej(new Error(ack.err));
+      } else if (typeof ack.pub === "string") {
+        res(ack.pub);
+      } else {
+        rej(new Error("unknown error"));
+      }
+    });
+  });
+
+/**
+ * @param {SimpleSocket} socket
+ * @throws {Error} If gun is not authenticated or is in the process of
+ * authenticating. Use `isAuthenticating()` and `isAuthenticated()` to check for
+ * this first.
+ * @returns {Mediator}
+ */
+const createMediator = socket => {
+  if (isAuthenticating() || !isAuthenticated()) {
+    throw new Error("Gun must be authenticated to create a Mediator");
+  }
+
+  return new Mediator(socket);
+};
+
+module.exports = {
+  authenticate,
+  createMediator,
+  isAuthenticated,
+  isAuthenticating,
+  isRegistering,
+  register
 };
