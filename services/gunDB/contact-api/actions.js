@@ -16,7 +16,7 @@ const { isHandshakeRequest } = require("./schema");
 /**
  * An special message signaling the acceptance.
  */
-exports.INITIAL_MSG = "$$__SHOCKWALLET__INITIAL__MESSAGE";
+const INITIAL_MSG = "$$__SHOCKWALLET__INITIAL__MESSAGE";
 
 /**
  * @returns {Message}
@@ -35,7 +35,7 @@ const __createInitialMessage = () => ({
  * @throws {ErrorCode.COULDNT_PUT_REQUEST_RESPONSE}
  * @returns {Promise<void>}
  */
-exports.__encryptAndPutResponseToRequest = (
+const __encryptAndPutResponseToRequest = (
   requestID,
   requestorPubKey,
   responseBody,
@@ -103,7 +103,7 @@ exports.__encryptAndPutResponseToRequest = (
  * @param {UserGUNNode} user
  * @returns {Promise<string>}
  */
-exports.__createOutgoingFeed = (withPublicKey, user) =>
+const __createOutgoingFeed = (withPublicKey, user) =>
   new Promise((resolve, reject) => {
     if (!user.is) {
       throw new Error(ErrorCode.NOT_AUTH);
@@ -153,7 +153,7 @@ exports.__createOutgoingFeed = (withPublicKey, user) =>
  * gun's part.
  * @returns {Promise<void>}
  */
-exports.acceptRequest = (
+const acceptRequest = (
   requestID,
   user,
   outgoingFeedCreator = exports.__createOutgoingFeed,
@@ -237,7 +237,7 @@ exports.acceptRequest = (
  * @param {string} pass
  * @param {UserGUNNode} userNode
  */
-exports.authenticate = (user, pass, userNode) =>
+const authenticate = (user, pass, userNode) =>
   new Promise((resolve, reject) => {
     if (typeof user !== "string") {
       throw new TypeError("expected user to be of type string");
@@ -276,7 +276,7 @@ exports.authenticate = (user, pass, userNode) =>
  * @throws {Error} If there's an error saving to the blacklist.
  * @returns {Promise<void>}
  */
-exports.blacklist = (publicKey, user) =>
+const blacklist = (publicKey, user) =>
   new Promise((resolve, reject) => {
     if (!user.is) {
       throw new Error(ErrorCode.NOT_AUTH);
@@ -297,7 +297,7 @@ exports.blacklist = (publicKey, user) =>
  * @throws {TypeError}
  * @returns {Promise<void>}
  */
-exports.generateNewHandshakeNode = (gun, user) =>
+const generateNewHandshakeNode = (gun, user) =>
   new Promise((resolve, reject) => {
     if (!user.is) {
       throw new Error(ErrorCode.NOT_AUTH);
@@ -326,7 +326,7 @@ exports.generateNewHandshakeNode = (gun, user) =>
  * @throws {Error} UNSUCCESSFUL_LOGOUT
  * @returns {Promise<void>}
  */
-exports.logout = user => {
+const logout = user => {
   if (!user.is) {
     return Promise.reject(new Error(ErrorCode.NOT_AUTH));
   }
@@ -349,7 +349,7 @@ exports.logout = user => {
  * @param {UserGUNNode} user
  * @returns {Promise<void>}
  */
-exports.register = (alias, pass, user) =>
+const register = (alias, pass, user) =>
   new Promise((resolve, reject) => {
     const u = /** @type {UserGUNNode} */ (user);
 
@@ -387,7 +387,7 @@ exports.register = (alias, pass, user) =>
  * @throws {Error|TypeError}
  * @returns {Promise<void>}
  */
-exports.sendHandshakeRequest = (
+const sendHandshakeRequest = (
   handshakeAddress,
   recipientPublicKey,
   gun,
@@ -488,7 +488,7 @@ exports.sendHandshakeRequest = (
  * @param {UserGUNNode} user
  * @returns {Promise<void>}
  */
-exports.sendMessage = (recipientPublicKey, body, user) => {
+const sendMessage = (recipientPublicKey, body, user) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -562,7 +562,7 @@ exports.sendMessage = (recipientPublicKey, body, user) => {
  * @throws {TypeError} Rejects if avatar is not an string or an empty string.
  * @returns {Promise<void>}
  */
-exports.setAvatar = (avatar, user) =>
+const setAvatar = (avatar, user) =>
   new Promise((resolve, reject) => {
     if (!user.is) {
       throw new Error(ErrorCode.NOT_AUTH);
@@ -599,7 +599,7 @@ exports.setAvatar = (avatar, user) =>
  * string.
  * @returns {Promise<void>}
  */
-exports.setDisplayName = (displayName, user) =>
+const setDisplayName = (displayName, user) =>
   new Promise((resolve, reject) => {
     if (!user.is) {
       throw new Error(ErrorCode.NOT_AUTH);
@@ -624,3 +624,19 @@ exports.setDisplayName = (displayName, user) =>
         }
       });
   });
+
+module.exports = {
+  INITIAL_MSG,
+  __encryptAndPutResponseToRequest,
+  __createOutgoingFeed,
+  acceptRequest,
+  authenticate,
+  blacklist,
+  generateNewHandshakeNode,
+  logout,
+  register,
+  sendHandshakeRequest,
+  sendMessage,
+  setAvatar,
+  setDisplayName
+};
