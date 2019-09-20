@@ -33,6 +33,7 @@ const __createInitialMessage = () => ({
  * to encrypt the response.
  * @param {string} responseBody An string that will be put to the request.
  * @param {UserGUNNode} user
+ * @param {ISEA} SEA
  * @throws {ErrorCode.COULDNT_PUT_REQUEST_RESPONSE}
  * @returns {Promise<void>}
  */
@@ -40,7 +41,8 @@ const __encryptAndPutResponseToRequest = async (
   requestID,
   requestorPubKey,
   responseBody,
-  user
+  user,
+  SEA
 ) => {
   const u = /** @type {UserGUNNode} */ (user);
 
@@ -74,11 +76,13 @@ const __encryptAndPutResponseToRequest = async (
 
   const currentHandshakeNode = u.get(Key.CURRENT_HANDSHAKE_NODE).get(requestID);
 
+  const secret = await SEA.secret(requestorPubKey, user._.sea);
+  const encryptedResponse = await SEA.encrypt(responseBody, secret);
+
   return new Promise((res, rej) => {
     currentHandshakeNode.put(
       {
-        // TODO: encrypt
-        response: "$$_TEST_" + responseBody
+        response: encryptedResponse
       },
       ack => {
         if (ack.err) {
