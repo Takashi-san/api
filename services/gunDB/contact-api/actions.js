@@ -36,47 +36,45 @@ const __createInitialMessage = () => ({
  * @throws {ErrorCode.COULDNT_PUT_REQUEST_RESPONSE}
  * @returns {Promise<void>}
  */
-const __encryptAndPutResponseToRequest = (
+const __encryptAndPutResponseToRequest = async (
   requestID,
   requestorPubKey,
   responseBody,
   user
-) =>
-  new Promise((resolve, reject) => {
-    const u = /** @type {UserGUNNode} */ (user);
+) => {
+  const u = /** @type {UserGUNNode} */ (user);
 
-    if (!u.is) {
-      throw new Error(ErrorCode.NOT_AUTH);
-    }
+  if (!u.is) {
+    throw new Error(ErrorCode.NOT_AUTH);
+  }
 
-    if (typeof requestID !== "string") {
-      throw new TypeError();
-    }
+  if (typeof requestID !== "string") {
+    throw new TypeError();
+  }
 
-    if (requestID.length === 0) {
-      throw new TypeError();
-    }
+  if (requestID.length === 0) {
+    throw new TypeError();
+  }
 
-    if (typeof requestorPubKey !== "string") {
-      throw new TypeError();
-    }
+  if (typeof requestorPubKey !== "string") {
+    throw new TypeError();
+  }
 
-    if (requestorPubKey.length === 0) {
-      throw new TypeError();
-    }
+  if (requestorPubKey.length === 0) {
+    throw new TypeError();
+  }
 
-    if (typeof responseBody !== "string") {
-      throw new TypeError();
-    }
+  if (typeof responseBody !== "string") {
+    throw new TypeError();
+  }
 
-    if (responseBody.length === 0) {
-      throw new TypeError();
-    }
+  if (responseBody.length === 0) {
+    throw new TypeError();
+  }
 
-    const currentHandshakeNode = u
-      .get(Key.CURRENT_HANDSHAKE_NODE)
-      .get(requestID);
+  const currentHandshakeNode = u.get(Key.CURRENT_HANDSHAKE_NODE).get(requestID);
 
+  return new Promise((res, rej) => {
     currentHandshakeNode.put(
       {
         // TODO: encrypt
@@ -84,13 +82,14 @@ const __encryptAndPutResponseToRequest = (
       },
       ack => {
         if (ack.err) {
-          reject(new Error(ErrorCode.COULDNT_PUT_REQUEST_RESPONSE));
+          rej(new Error(ErrorCode.COULDNT_PUT_REQUEST_RESPONSE));
         } else {
-          resolve();
+          res();
         }
       }
     );
   });
+};
 
 /**
  * Create a an outgoing feed. The feed will have an initial special acceptance
