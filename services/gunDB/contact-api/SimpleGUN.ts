@@ -48,12 +48,30 @@ export interface GUNNode {
   user(epub: string): GUNNode;
 }
 
+export interface CreateAck {
+  pub: string | undefined;
+  err: string | undefined;
+}
+
+export type CreateCB = (ack: CreateAck) => void;
+
+export interface AuthAck {
+  err: string | undefined;
+  sea:
+    | {
+        pub: string;
+      }
+    | undefined;
+}
+
+export type AuthCB = (ack: AuthAck) => void;
+
 export interface UserGUNNode extends GUNNode {
   _: UserSoul;
-  auth(user: string, pass: string, cb: Callback): void;
+  auth(user: string, pass: string, cb: AuthCB): void;
   is?: {
     pub: string;
   };
-  create(user: string, pass: string, cb: Callback): void;
+  create(user: string, pass: string, cb: CreateCB): void;
   leave(): void;
 }
