@@ -388,6 +388,7 @@ const register = (alias, pass, user) =>
  * @param {string} recipientPublicKey
  * @param {GUNNode} gun
  * @param {UserGUNNode} user
+ * @param {ISEA} SEA
  * @throws {Error|TypeError}
  * @returns {Promise<void>}
  */
@@ -395,7 +396,8 @@ const sendHandshakeRequest = async (
   handshakeAddress,
   recipientPublicKey,
   gun,
-  user
+  user,
+  SEA
 ) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
@@ -431,7 +433,7 @@ const sendHandshakeRequest = async (
         if (ack.err) {
           rej(
             new Error(
-              `error writing to recipientToOutgoing on handshake request creation: ${ack.err}`
+              `Error writing to recipientToOutgoing on handshake request creation: ${ack.err}`
             )
           );
         } else {
@@ -440,10 +442,12 @@ const sendHandshakeRequest = async (
       });
   });
 
+  const secret = await SEA.secret(recipientPublicKey, user._.sea);
+  const encryptedOutgoingFeedID = await SEA.encrypt(recipientPublicKey, secret);
+
   /** @type {HandshakeRequest} */
   const handshakeRequestData = {
-    // TODO: encrypt and make it indistinguishable from a non-response
-    response: outgoingFeedID,
+    response: encryptedOutgoingFeedID,
     from: user.is.pub,
     timestamp: Date.now()
   };
