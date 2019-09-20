@@ -31,10 +31,6 @@ export interface Soul {
   put: Primitive | null | object | undefined;
 }
 
-export interface UserSoul extends Soul {
-  sea?: string;
-}
-
 export interface GUNNode {
   _: Soul;
   get(key: string): GUNNode;
@@ -65,6 +61,20 @@ export interface AuthAck {
 }
 
 export type AuthCB = (ack: AuthAck) => void;
+
+export interface UserPair {
+  epriv: string;
+  epub: string;
+  priv: string;
+  pub: string;
+}
+
+export interface UserSoul extends Soul {
+  _: {
+    sea: UserPair;
+  };
+  sea?: string;
+}
 
 export interface UserGUNNode extends GUNNode {
   _: UserSoul;
