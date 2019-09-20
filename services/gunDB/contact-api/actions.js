@@ -391,99 +391,108 @@ const register = (alias, pass, user) =>
  * @throws {Error|TypeError}
  * @returns {Promise<void>}
  */
-const sendHandshakeRequest = (
+const sendHandshakeRequest = async (
   handshakeAddress,
   recipientPublicKey,
   gun,
   user
-) =>
-  new Promise((resolve, reject) => {
-    if (!user.is) {
-      throw new Error(ErrorCode.NOT_AUTH);
-    }
+) => {
+  if (!user.is) {
+    throw new Error(ErrorCode.NOT_AUTH);
+  }
 
-    if (typeof handshakeAddress !== "string") {
-      throw new TypeError(
-        `handshakeAddress is not string, got: ${typeof handshakeAddress}`
-      );
-    }
+  if (typeof handshakeAddress !== "string") {
+    throw new TypeError(
+      `handshakeAddress is not string, got: ${typeof handshakeAddress}`
+    );
+  }
 
-    if (typeof recipientPublicKey !== "string") {
-      throw new TypeError(
-        `recipientPublicKey is not string, got: ${typeof recipientPublicKey}`
-      );
-    }
+  if (typeof recipientPublicKey !== "string") {
+    throw new TypeError(
+      `recipientPublicKey is not string, got: ${typeof recipientPublicKey}`
+    );
+  }
 
-    if (handshakeAddress.length === 0) {
-      throw new TypeError("handshakeAddress is an string of length 0");
-    }
+  if (handshakeAddress.length === 0) {
+    throw new TypeError("handshakeAddress is an string of length 0");
+  }
 
-    if (recipientPublicKey.length === 0) {
-      throw new TypeError("recipientPublicKey is an string of length 0");
-    }
+  if (recipientPublicKey.length === 0) {
+    throw new TypeError("recipientPublicKey is an string of length 0");
+  }
 
-    __createOutgoingFeed(recipientPublicKey, user)
-      .then(async outgoingFeedID => {
-        if (typeof user.is === "undefined") {
-          reject(new TypeError());
-          return;
+  const outgoingFeedID = await __createOutgoingFeed(recipientPublicKey, user);
+
+  await new Promise((res, rej) => {
+    user
+      .get(Key.RECIPIENT_TO_OUTGOING)
+      .get(recipientPublicKey)
+      .put(outgoingFeedID, ack => {
+        if (ack.err) {
+          rej(
+            new Error(
+              `error writing to recipientToOutgoing on handshake request creation: ${ack.err}`
+            )
+          );
+        } else {
+          res();
         }
-
-        await new Promise((res, rej) => {
-          user
-            .get(Key.RECIPIENT_TO_OUTGOING)
-            .get(recipientPublicKey)
-            .put(outgoingFeedID, ack => {
-              if (ack.err) {
-                rej(
-                  new Error(
-                    `error writing to recipientToOutgoing on handshake request creation: ${ack.err}`
-                  )
-                );
-              } else {
-                res();
-              }
-            });
-        });
-
-        /** @type {HandshakeRequest} */
-        const handshakeRequestData = {
-          // TODO: Encrypt, make it indistinguishable from a non-response
-          response: outgoingFeedID,
-          from: user.is.pub,
-          timestamp: Date.now()
-        };
-
-        const handshakeRequestNode = gun
-          .get(Key.HANDSHAKE_NODES)
-          .get(handshakeAddress)
-          .set(handshakeRequestData, ack => {
-            if (ack.err) {
-              reject(new Error(ack.err));
-            } else {
-              user.get(Key.SENT_REQUESTS).set(handshakeRequestNode, ack => {
-                if (ack.err) {
-                  reject(new Error(ack.err));
-                } else {
-                  user
-                    .get(Key.REQUEST_TO_USER)
-                    .get(/** @type {string} */ (handshakeRequestNode._.get))
-                    .put(recipientPublicKey, ack => {
-                      if (ack.err) {
-                        reject(new Error(ack.err));
-                      } else {
-                        resolve();
-                      }
-                    });
-                }
-              });
-            }
-          });
-      })
-      .catch(e => {
-        reject(e);
       });
   });
+
+  /** @type {HandshakeRequest} */
+  const handshakeRequestData = {
+    // TODO: encrypt and make it indistinguishable from a non-response
+    response: outgoingFeedID,
+    from: user.is.pub,
+    timestamp: Date.now()
+  };
+
+  /** @type {GUNNode} */
+  const handshakeRequest = await new Promise((res, rej) => {
+    const hr = gun
+      .get(Key.HANDSHAKE_NODES)
+      .get(handshakeAddress)
+      .set(handshakeRequestData, ack => {
+        if (ack.err) {
+          rej(new Error(`Error trying to create request: ${ack.err}`));
+        } else {
+          res(hr);
+        }
+      });
+  });
+
+  await new Promise((res, rej) => {
+    user.get(Key.SENT_REQUESTS).set(handshakeRequest, ack => {
+      if (ack.err) {
+        rej(
+          new Error(
+            `Error saving newly created request to sent requests: ${ack.err}`
+          )
+        );
+      } else {
+        res();
+      }
+    });
+  });
+
+  return new Promise((res, rej) => {
+    user
+      .get(Key.REQUEST_TO_USER)
+      .get(/** @type {string} */ (handshakeRequest._.get))
+      .put(recipientPublicKey, ack => {
+        if (ack.err) {
+          rej(
+            new Error(
+              `Error saving recipient public key to request to user: ${ack.err}`
+            )
+          );
+        } else {
+          res();
+        }
+      });
+  });
+};
 
 /**
  * @param {string} recipientPublicKey
