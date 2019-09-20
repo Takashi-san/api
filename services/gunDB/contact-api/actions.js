@@ -6,6 +6,7 @@ const Key = require("./key");
 const { isHandshakeRequest } = require("./schema");
 /**
  * @typedef {import('./SimpleGUN').GUNNode} GUNNode
+ * @typedef {import('./SimpleGUN').ISEA} ISEA
  * @typedef {import('./SimpleGUN').UserGUNNode} UserGUNNode
  * @typedef {import('./schema').HandshakeRequest} HandshakeRequest
  * @typedef {import('./schema').Message} Message
@@ -485,9 +486,10 @@ const sendHandshakeRequest = (
  * @param {string} recipientPublicKey
  * @param {string} body
  * @param {UserGUNNode} user
+ * @param {ISEA} SEA
  * @returns {Promise<void>}
  */
-const sendMessage = async (recipientPublicKey, body, user) => {
+const sendMessage = async (recipientPublicKey, body, user, SEA) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -534,8 +536,11 @@ const sendMessage = async (recipientPublicKey, body, user) => {
       });
   });
 
+  const secret = await SEA.secret(recipientPublicKey, user._.sea);
+  const encryptedBody = await SEA.encrypt(body, secret);
+
   const newMessage = {
-    body,
+    body: encryptedBody,
     timestamp: Date.now()
   };
 
