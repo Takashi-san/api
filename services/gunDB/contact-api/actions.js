@@ -487,7 +487,7 @@ const sendHandshakeRequest = (
  * @param {UserGUNNode} user
  * @returns {Promise<void>}
  */
-const sendMessage = (recipientPublicKey, body, user) => {
+const sendMessage = async (recipientPublicKey, body, user) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -516,7 +516,8 @@ const sendMessage = (recipientPublicKey, body, user) => {
     );
   }
 
-  return new Promise((res, rej) => {
+  /** @type {string} */
+  const outgoingID = await new Promise((res, rej) => {
     user
       .get(Key.RECIPIENT_TO_OUTGOING)
       .get(recipientPublicKey)
@@ -531,28 +532,26 @@ const sendMessage = (recipientPublicKey, body, user) => {
           );
         }
       });
-  }).then(
-    (/** @type {string} */ outgoingID) =>
-      new Promise((res, rej) => {
-        /** @type {Message} */
-        const newMessage = {
-          body,
-          timestamp: Date.now()
-        };
+  });
 
-        user
-          .get(Key.OUTGOINGS)
-          .get(outgoingID)
-          .get(Key.MESSAGES)
-          .set(newMessage, ack => {
-            if (ack.err) {
-              rej(ack.err);
-            } else {
-              res();
-            }
-          });
-      })
-  );
+  const newMessage = {
+    body,
+    timestamp: Date.now()
+  };
+
+  return new Promise((res, rej) => {
+    user
+      .get(Key.OUTGOINGS)
+      .get(outgoingID)
+      .get(Key.MESSAGES)
+      .set(newMessage, ack => {
+        if (ack.err) {
+          rej(ack.err);
+        } else {
+          res();
+        }
+      });
+  });
 };
 
 /**
