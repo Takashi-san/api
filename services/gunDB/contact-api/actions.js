@@ -22,7 +22,7 @@ const INITIAL_MSG = "$$__SHOCKWALLET__INITIAL__MESSAGE";
  * @returns {Message}
  */
 const __createInitialMessage = () => ({
-  body: exports.INITIAL_MSG,
+  body: INITIAL_MSG,
   timestamp: Date.now()
 });
 
@@ -145,9 +145,9 @@ const __createOutgoingFeed = (withPublicKey, user) =>
  * feed on the response prop of the request.
  * @param {string} requestID The id for the request to accept.
  * @param {UserGUNNode} user Pass only for testing purposes.
- * @param {typeof exports.__createOutgoingFeed} outgoingFeedCreator Pass only
+ * @param {typeof __createOutgoingFeed} outgoingFeedCreator Pass only
  * for testing. purposes.
- * @param {typeof exports.__encryptAndPutResponseToRequest}
+ * @param {typeof __encryptAndPutResponseToRequest}
  * responseToRequestEncryptorAndPutter Pass only for testing.
  * @throws {Error} Throws if trying to accept an invalid request, or an error on
  * gun's part.
@@ -156,8 +156,8 @@ const __createOutgoingFeed = (withPublicKey, user) =>
 const acceptRequest = (
   requestID,
   user,
-  outgoingFeedCreator = exports.__createOutgoingFeed,
-  responseToRequestEncryptorAndPutter = exports.__encryptAndPutResponseToRequest
+  outgoingFeedCreator = __createOutgoingFeed,
+  responseToRequestEncryptorAndPutter = __encryptAndPutResponseToRequest
 ) =>
   new Promise((resolve, reject) => {
     const u = /** @type {UserGUNNode} */ user;
@@ -418,8 +418,7 @@ const sendHandshakeRequest = (
       throw new TypeError("recipientPublicKey is an string of length 0");
     }
 
-    exports
-      .__createOutgoingFeed(recipientPublicKey, user)
+    __createOutgoingFeed(recipientPublicKey, user)
       .then(async outgoingFeedID => {
         if (typeof user.is === "undefined") {
           reject(new TypeError());
