@@ -70,10 +70,7 @@ export interface UserPair {
 }
 
 export interface UserSoul extends Soul {
-  _: {
-    sea: UserPair;
-  };
-  sea?: string;
+  sea: UserPair;
 }
 
 export interface UserGUNNode extends GUNNode {
