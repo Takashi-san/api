@@ -85,3 +85,12 @@ export interface UserGUNNode extends GUNNode {
   create(user: string, pass: string, cb: CreateCB): void;
   leave(): void;
 }
+
+export interface ISEA {
+  encrypt(message: string, senderSecret: string): Promise<string>;
+  decrypt(encryptedMessage: string, recipientSecret: string): Promise<string>;
+  secret(
+    recipientOrSenderPublicKey: string,
+    recipientOrSenderUserPair: UserPair
+  ): Promise<string>;
+}
