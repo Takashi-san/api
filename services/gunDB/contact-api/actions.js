@@ -93,8 +93,9 @@ const __encryptAndPutResponseToRequest = async (
                 "Expected gun.user(pub).get(epub) to be a populated string."
               )
             );
+          } else {
+            res(epub);
           }
-          res(epub);
         }
       });
   });
@@ -486,8 +487,9 @@ const sendHandshakeRequest = async (
                 "Expected gun.user(pub).get(epub) to be a populated string."
               )
             );
+          } else {
+            res(epub);
           }
-          res(epub);
         }
       });
   });
