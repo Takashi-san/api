@@ -8,6 +8,7 @@ const uniqBy = require("lodash/uniqBy");
 /**
  * @typedef {import('./SimpleGUN').UserGUNNode} UserGUNNode
  * @typedef {import('./SimpleGUN').GUNNode} GUNNode
+ * @typedef {import('./SimpleGUN').ISEA} ISEA
  * @typedef {import('./schema').HandshakeRequest} HandshakeRequest
  * @typedef {import('./schema').Message} Message
  * @typedef {import('./schema').Outgoing} Outgoing
@@ -249,25 +250,31 @@ const onDisplayName = (cb, user) => {
  * @param {(messages: Record<string, Message>) => void} cb
  * @param {string} userPK Public key of the user from whom the incoming
  * messages will be obtained.
- * @param {string} outgoingFeedID ID of the outgoing feed from which the
+ * @param {string} incomingFeedID ID of the outgoing feed from which the
  * incoming messages will be obtained.
  * @param {GUNNode} gun (Pass only for testing purposes)
+ * @param {UserGUNNode} user
+ * @param {ISEA} SEA
  * @returns {void}
  */
-const onIncomingMessages = (cb, userPK, outgoingFeedID, gun) => {
-  const user = gun.user(userPK);
+const onIncomingMessages = (cb, userPK, incomingFeedID, gun, user, SEA) => {
+  if (!user.is) {
+    throw new Error(ErrorCode.NOT_AUTH);
+  }
+
+  const otherUser = gun.user(userPK);
 
   /**
    * @type {Record<string, Message>}
    */
   const messages = {};
 
-  user
+  otherUser
     .get(Key.OUTGOINGS)
-    .get(outgoingFeedID)
+    .get(incomingFeedID)
     .get(Key.MESSAGES)
     .map()
-    .on((data, key) => {
+    .on(async (data, key) => {
       if (!Schema.isMessage(data)) {
         console.warn("non-message received");
         return;
@@ -275,7 +282,16 @@ const onIncomingMessages = (cb, userPK, outgoingFeedID, gun) => {
 
       const msg = data;
 
-      messages[key] = msg;
+      const encryptedBody = msg.body;
+
+      const secret = await SEA.secret(userPK, user._.sea);
+      const decryptedBody = await SEA.decrypt(encryptedBody, secret);
+
+      messages[key] = {
+        // @ts-ignore TODO: See what's going on with typescript here
+        ...msg,
+        body: decryptedBody
+      };
 
       cb(messages);
     });
@@ -376,9 +392,10 @@ const onSentRequests = (cb, user) => {
  * @param {(chats: Chat[]) => void} cb
  * @param {GUNNode} gun
  * @param {UserGUNNode} user
+ * @param {ISEA} SEA
  * @returns {void}
  */
-const onChats = (cb, gun, user) => {
+const onChats = (cb, gun, user, SEA) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -490,7 +507,9 @@ const onChats = (cb, gun, user) => {
           },
           recipientPK,
           incomingFeedID,
-          gun
+          gun,
+          user,
+          SEA
         );
       }
 
