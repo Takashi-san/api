@@ -131,40 +131,60 @@ const __encryptAndPutResponseToRequest = async (
  * @param {UserGUNNode} user
  * @returns {Promise<string>}
  */
-const __createOutgoingFeed = (withPublicKey, user) =>
-  new Promise((resolve, reject) => {
-    if (!user.is) {
-      throw new Error(ErrorCode.NOT_AUTH);
-    }
+const __createOutgoingFeed = async (withPublicKey, user) => {
+  if (!user.is) {
+    throw new Error(ErrorCode.NOT_AUTH);
+  }
 
-    /** @type {PartialOutgoing} */
-    const newPartialOutgoingFeed = {
-      with: withPublicKey
-    };
+  /** @type {PartialOutgoing} */
+  const newPartialOutgoingFeed = {
+    with: withPublicKey
+  };
 
-    const outgoingFeed = user
-      .get(Key.OUTGOINGS)
-      .set(newPartialOutgoingFeed, outgoingFeedAck => {
-        if (outgoingFeedAck.err) {
-          reject(new Error(outgoingFeedAck.err));
+  /** @type {GUNNode} */
+  const outgoingFeed = await new Promise((res, rej) => {
+    const outFeed = user.get(Key.OUTGOINGS).set(newPartialOutgoingFeed, ack => {
+      if (ack.err) {
+        rej(new Error(ack.err));
+      } else {
+        res(outFeed);
+      }
+    });
+  });
+
+  const outgoingFeedID = /** @type {string} */ (outgoingFeed._.get);
+
+  try {
+    await new Promise((res, rej) => {
+      outgoingFeed.get(Key.MESSAGES).set(__createInitialMessage(), ack => {
+        if (ack.err) {
+          rej(new Error(ack.err));
         } else {
-          outgoingFeed
-            .get(Key.MESSAGES)
-            .set(__createInitialMessage(), msgAck => {
-              if (msgAck.err) {
-                user
-                  .get(Key.OUTGOINGS)
-                  .get(/** @type {string} */ (outgoingFeed._.get))
-                  .put(null);
-
-                reject(new Error());
-              } else {
-                resolve(/** @type {string} */ (outgoingFeed._.get));
-              }
-            });
+          res();
         }
       });
-  });
+    });
+  } catch (e) {
+    console.warn(
+      `Got an error ${e.message} setting the initial message on an outgoing feed. Will now try to null out the outgoing feed...`
+    );
+
+    user
+      .get(Key.OUTGOINGS)
+      .get(outgoingFeedID)
+      .put(null, ack => {
+        if (ack.err) {
+          console.warn(
+            "... WARNING: could not null out outgoing fee. This will result in an outgoing feed without an initial message which is unexpected behaviour."
+          );
+        } else {
+          console.warn("...successfully nulled out outgoing feed.");
+        }
+      });
+  }
+
+  return outgoingFeedID;
+};
 
 /**
  * Given a request's ID, that should be found on the user's current handshake
