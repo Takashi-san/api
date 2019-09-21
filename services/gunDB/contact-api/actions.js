@@ -32,6 +32,7 @@ const __createInitialMessage = () => ({
  * @param {string} requestorPubKey The public key of the requestor, will be used
  * to encrypt the response.
  * @param {string} responseBody An string that will be put to the request.
+ * @param {GUNNode} gun
  * @param {UserGUNNode} user
  * @param {ISEA} SEA
  * @throws {ErrorCode.COULDNT_PUT_REQUEST_RESPONSE}
@@ -41,6 +42,7 @@ const __encryptAndPutResponseToRequest = async (
   requestID,
   requestorPubKey,
   responseBody,
+  gun,
   user,
   SEA
 ) => {
@@ -76,7 +78,28 @@ const __encryptAndPutResponseToRequest = async (
 
   const currentHandshakeNode = u.get(Key.CURRENT_HANDSHAKE_NODE).get(requestID);
 
-  const secret = await SEA.secret(requestorPubKey, user._.sea);
+  /** @type {string} */
+  const requestorEpub = await new Promise((res, rej) => {
+    gun
+      .user(requestorPubKey)
+      .get("epub")
+      .once(epub => {
+        if (typeof epub !== "string") {
+          rej(new Error("Expected gun.user(pub).get(epub) to be an string."));
+        } else {
+          if (epub.length === 0) {
+            rej(
+              new Error(
+                "Expected gun.user(pub).get(epub) to be a populated string."
+              )
+            );
+          }
+          res(epub);
+        }
+      });
+  });
+
+  const secret = await SEA.secret(requestorEpub, user._.sea);
   const encryptedResponse = await SEA.encrypt(responseBody, secret);
 
   return new Promise((res, rej) => {
@@ -148,7 +171,9 @@ const __createOutgoingFeed = (withPublicKey, user) =>
  * requestor, then encrypting and putting the id of this newly created outgoing
  * feed on the response prop of the request.
  * @param {string} requestID The id for the request to accept.
+ * @param {GUNNode} gun
  * @param {UserGUNNode} user Pass only for testing purposes.
+ * @param {ISEA} SEA
  * @param {typeof __createOutgoingFeed} outgoingFeedCreator Pass only
  * for testing. purposes.
  * @param {typeof __encryptAndPutResponseToRequest}
@@ -159,7 +184,9 @@ const __createOutgoingFeed = (withPublicKey, user) =>
  */
 const acceptRequest = (
   requestID,
+  gun,
   user,
+  SEA,
   outgoingFeedCreator = __createOutgoingFeed,
   responseToRequestEncryptorAndPutter = __encryptAndPutResponseToRequest
 ) =>
@@ -194,7 +221,9 @@ const acceptRequest = (
             requestID,
             "$$_TEST",
             outgoingFeedID,
-            user
+            gun,
+            user,
+            SEA
           );
         })
         .then(
@@ -442,7 +471,28 @@ const sendHandshakeRequest = async (
       });
   });
 
-  const secret = await SEA.secret(recipientPublicKey, user._.sea);
+  /** @type {string} */
+  const recipientEpub = await new Promise((res, rej) => {
+    gun
+      .user(recipientPublicKey)
+      .get("epub")
+      .once(epub => {
+        if (typeof epub !== "string") {
+          rej(new Error("Expected gun.user(pub).get(epub) to be an string."));
+        } else {
+          if (epub.length === 0) {
+            rej(
+              new Error(
+                "Expected gun.user(pub).get(epub) to be a populated string."
+              )
+            );
+          }
+          res(epub);
+        }
+      });
+  });
+
+  const secret = await SEA.secret(recipientEpub, user._.sea);
   const encryptedOutgoingFeedID = await SEA.encrypt(outgoingFeedID, secret);
 
   /** @type {HandshakeRequest} */
@@ -501,11 +551,12 @@ const sendHandshakeRequest = async (
 /**
  * @param {string} recipientPublicKey
  * @param {string} body
+ * @param {GUNNode} gun
  * @param {UserGUNNode} user
  * @param {ISEA} SEA
  * @returns {Promise<void>}
  */
-const sendMessage = async (recipientPublicKey, body, user, SEA) => {
+const sendMessage = async (recipientPublicKey, body, gun, user, SEA) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -552,7 +603,28 @@ const sendMessage = async (recipientPublicKey, body, user, SEA) => {
       });
   });
 
-  const secret = await SEA.secret(recipientPublicKey, user._.sea);
+  /** @type {string} */
+  const recipientEpub = await new Promise((res, rej) => {
+    gun
+      .user(recipientPublicKey)
+      .get("epub")
+      .once(epub => {
+        if (typeof epub !== "string") {
+          rej(new Error("Expected gun.user(pub).get(epub) to be an string."));
+        } else {
+          if (epub.length === 0) {
+            rej(
+              new Error(
+                "Expected gun.user(pub).get(epub) to be a populated string."
+              )
+            );
+          }
+          res(epub);
+        }
+      });
+  });
+
+  const secret = await SEA.secret(recipientEpub, user._.sea);
   const encryptedBody = await SEA.encrypt(body, secret);
 
   const newMessage = {

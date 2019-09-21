@@ -284,7 +284,30 @@ const onIncomingMessages = (cb, userPK, incomingFeedID, gun, user, SEA) => {
 
       const encryptedBody = msg.body;
 
-      const secret = await SEA.secret(userPK, user._.sea);
+      /** @type {string} */
+      const recipientEpub = await new Promise((res, rej) => {
+        gun
+          .user(userPK)
+          .get("epub")
+          .once(epub => {
+            if (typeof epub !== "string") {
+              rej(
+                new Error("Expected gun.user(pub).get(epub) to be an string.")
+              );
+            } else {
+              if (epub.length === 0) {
+                rej(
+                  new Error(
+                    "Expected gun.user(pub).get(epub) to be a populated string."
+                  )
+                );
+              }
+              res(epub);
+            }
+          });
+      });
+
+      const secret = await SEA.secret(recipientEpub, user._.sea);
       const decryptedBody = await SEA.decrypt(encryptedBody, secret);
 
       messages[key] = {

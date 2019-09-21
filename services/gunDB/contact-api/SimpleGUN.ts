@@ -87,7 +87,7 @@ export interface ISEA {
   encrypt(message: string, senderSecret: string): Promise<string>;
   decrypt(encryptedMessage: string, recipientSecret: string): Promise<string>;
   secret(
-    recipientOrSenderPublicKey: string,
+    recipientOrSenderEpub: string,
     recipientOrSenderUserPair: UserPair
   ): Promise<string>;
 }
