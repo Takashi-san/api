@@ -443,7 +443,7 @@ const sendHandshakeRequest = async (
   });
 
   const secret = await SEA.secret(recipientPublicKey, user._.sea);
-  const encryptedOutgoingFeedID = await SEA.encrypt(recipientPublicKey, secret);
+  const encryptedOutgoingFeedID = await SEA.encrypt(outgoingFeedID, secret);
 
   /** @type {HandshakeRequest} */
   const handshakeRequestData = {
