@@ -48,7 +48,7 @@ const __onOutgoingMessage = (outgoingKey, cb, user) => {
  * @param {UserGUNNode} user Pass only for testing purposes.
  * @returns {void}
  */
-exports.__onSentRequestToUser = (cb, user) => {
+const __onSentRequestToUser = (cb, user) => {
   /** @type {Record<string, string>} */
   const requestToUser = {};
 
@@ -81,7 +81,7 @@ exports.__onSentRequestToUser = (cb, user) => {
  * @param {UserGUNNode} user Pass only for testing purposes.
  * @returns {void}
  */
-exports.__onUserToIncoming = (cb, user) => {
+const __onUserToIncoming = (cb, user) => {
   /** @type {Record<string, string>} */
   const userToOutgoing = {};
 
@@ -111,7 +111,7 @@ exports.__onUserToIncoming = (cb, user) => {
  * @throws {Error} If user hasn't been auth.
  * @returns {void}
  */
-exports.onAvatar = (cb, user) => {
+const onAvatar = (cb, user) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -135,7 +135,7 @@ exports.onAvatar = (cb, user) => {
  * @param {UserGUNNode} user
  * @returns {void}
  */
-exports.onBlacklist = (cb, user) => {
+const onBlacklist = (cb, user) => {
   /** @type {string[]} */
   const blacklist = [];
 
@@ -164,7 +164,7 @@ exports.onBlacklist = (cb, user) => {
  * @param {UserGUNNode} user
  * @returns {void}
  */
-exports.onCurrentHandshakeAddress = (cb, user) => {
+const onCurrentHandshakeAddress = (cb, user) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -191,7 +191,7 @@ exports.onCurrentHandshakeAddress = (cb, user) => {
  * @param {UserGUNNode} user Pass only for testing purposes.
  * @returns {void}
  */
-exports.onCurrentHandshakeNode = (cb, user) => {
+const onCurrentHandshakeNode = (cb, user) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -226,7 +226,7 @@ exports.onCurrentHandshakeNode = (cb, user) => {
  * @throws {Error} If user hasn't been auth.
  * @returns {void}
  */
-exports.onDisplayName = (cb, user) => {
+const onDisplayName = (cb, user) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -254,7 +254,7 @@ exports.onDisplayName = (cb, user) => {
  * @param {GUNNode} gun (Pass only for testing purposes)
  * @returns {void}
  */
-exports.onIncomingMessages = (cb, userPK, outgoingFeedID, gun) => {
+const onIncomingMessages = (cb, userPK, outgoingFeedID, gun) => {
   const user = gun.user(userPK);
 
   /**
@@ -287,7 +287,7 @@ exports.onIncomingMessages = (cb, userPK, outgoingFeedID, gun) => {
  * @param {UserGUNNode} user
  * @param {typeof __onOutgoingMessage} onOutgoingMessage
  */
-exports.onOutgoing = (cb, user, onOutgoingMessage = __onOutgoingMessage) => {
+const onOutgoing = (cb, user, onOutgoingMessage = __onOutgoingMessage) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -344,7 +344,7 @@ exports.onOutgoing = (cb, user, onOutgoingMessage = __onOutgoingMessage) => {
  * @param {UserGUNNode} user Pass only for testing purposes.
  * @returns {void}
  */
-exports.onSentRequests = (cb, user) => {
+const onSentRequests = (cb, user) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -378,7 +378,7 @@ exports.onSentRequests = (cb, user) => {
  * @param {UserGUNNode} user
  * @returns {void}
  */
-exports.onChats = (cb, gun, user) => {
+const onChats = (cb, gun, user) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -425,7 +425,7 @@ exports.onChats = (cb, gun, user) => {
 
   callCB();
 
-  exports.onOutgoing(outgoings => {
+  onOutgoing(outgoings => {
     for (const outgoing of Object.values(outgoings)) {
       const recipientPK = outgoing.with;
 
@@ -455,7 +455,7 @@ exports.onChats = (cb, gun, user) => {
     callCB();
   }, user);
 
-  exports.__onUserToIncoming(uti => {
+  __onUserToIncoming(uti => {
     for (const [recipientPK, incomingFeedID] of Object.entries(uti)) {
       if (!recipientPKToChat[recipientPK]) {
         recipientPKToChat[recipientPK] = {
@@ -471,7 +471,7 @@ exports.onChats = (cb, gun, user) => {
       if (!usersWithIncomingListeners.includes(recipientPK)) {
         usersWithIncomingListeners.push(recipientPK);
 
-        exports.onIncomingMessages(
+        onIncomingMessages(
           msgs => {
             for (const [msgK, msg] of Object.entries(msgs)) {
               const messages = chat.messages;
@@ -534,7 +534,7 @@ exports.onChats = (cb, gun, user) => {
  * @param {UserGUNNode} user
  * @returns {void}
  */
-exports.onSimplerReceivedRequests = (cb, gun, user) => {
+const onSimplerReceivedRequests = (cb, gun, user) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -648,7 +648,7 @@ exports.onSimplerReceivedRequests = (cb, gun, user) => {
  * @param {UserGUNNode} user
  * @returns {void}
  */
-exports.onSimplerSentRequests = (cb, gun, user) => {
+const onSimplerSentRequests = (cb, gun, user) => {
   /**
    * @type {Record<string, Omit<SimpleSentRequest, 'timestamp'> & { timestamp?: undefined|number}>}
    **/
@@ -714,7 +714,7 @@ exports.onSimplerSentRequests = (cb, gun, user) => {
       callCB();
     });
 
-  exports.__onSentRequestToUser(srtu => {
+  __onSentRequestToUser(srtu => {
     for (const [sentRequestID, recipientPK] of Object.entries(srtu)) {
       if (!idToPartialSimpleSentRequest[sentRequestID]) {
         idToPartialSimpleSentRequest[sentRequestID] = {
@@ -807,4 +807,20 @@ exports.onSimplerSentRequests = (cb, gun, user) => {
 
     callCB();
   }, user);
+};
+
+module.exports = {
+  __onSentRequestToUser,
+  __onUserToIncoming,
+  onAvatar,
+  onBlacklist,
+  onCurrentHandshakeAddress,
+  onCurrentHandshakeNode,
+  onDisplayName,
+  onIncomingMessages,
+  onOutgoing,
+  onSentRequests,
+  onChats,
+  onSimplerReceivedRequests,
+  onSimplerSentRequests
 };
