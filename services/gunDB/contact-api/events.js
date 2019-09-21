@@ -23,23 +23,77 @@ const uniqBy = require("lodash/uniqBy");
  *
  * @param {string} outgoingKey
  * @param {(message: Message, key: string) => void} cb
+ * @param {GUNNode} gun
  * @param {UserGUNNode} user
- * @returns {void}
+ * @param {ISEA} SEA
+ * @returns {Promise<void>}
  */
-const __onOutgoingMessage = (outgoingKey, cb, user) => {
+const __onOutgoingMessage = async (outgoingKey, cb, gun, user, SEA) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
 
-  user
-    .get(Key.OUTGOINGS)
-    .get(outgoingKey)
+  const outgoing = user.get(Key.OUTGOINGS).get(outgoingKey);
+
+  /** @type {string} */
+  const recipientPublicKey = await new Promise((res, rej) => {
+    outgoing.get("with").once(rpk => {
+      if (typeof rpk !== "string") {
+        rej(new TypeError("Expected outgoing.get('with') to be an string."));
+      } else {
+        if (rpk.length === 0) {
+          rej(
+            new TypeError("Expected outgoing.get('with') to be a populated.")
+          );
+        } else {
+          res(rpk);
+        }
+      }
+    });
+  });
+
+  /** @type {string} */
+  const recipientEpub = await new Promise((res, rej) => {
+    gun
+      .user(recipientPublicKey)
+      .get("epub")
+      .once(epub => {
+        if (typeof epub !== "string") {
+          rej(new Error("Expected gun.user(pub).get(epub) to be an string."));
+        } else {
+          if (epub.length === 0) {
+            rej(
+              new Error(
+                "Expected gun.user(pub).get(epub) to be a populated string."
+              )
+            );
+          }
+          res(epub);
+        }
+      });
+  });
+
+  const secret = await SEA.secret(recipientEpub, user._.sea);
+
+  outgoing
     .get(Key.MESSAGES)
     .map()
-    .on((data, key) => {
-      if (Schema.isMessage(data)) {
-        cb(data, key);
+    .on(async (msg, key) => {
+      if (!Schema.isMessage(msg)) {
+        console.warn("non message received");
+        return;
       }
+
+      const encryptedBody = msg.body;
+      const decryptedBody = await SEA.decrypt(encryptedBody, secret);
+
+      cb(
+        {
+          body: decryptedBody,
+          timestamp: msg.timestamp
+        },
+        key
+      );
     });
 };
 
@@ -308,6 +362,7 @@ const onIncomingMessages = (cb, userPK, incomingFeedID, gun, user, SEA) => {
       });
 
       const secret = await SEA.secret(recipientEpub, user._.sea);
+      // @ts-ignore TODO: See what's going on with typescript here
       const decryptedBody = await SEA.decrypt(encryptedBody, secret);
 
       messages[key] = {
@@ -323,10 +378,18 @@ const onIncomingMessages = (cb, userPK, incomingFeedID, gun, user, SEA) => {
 /**
  *
  * @param {(outgoings: Record<string, Outgoing>) => void} cb
+ * @param {GUNNode} gun
  * @param {UserGUNNode} user
+ * @param {ISEA} SEA
  * @param {typeof __onOutgoingMessage} onOutgoingMessage
  */
-const onOutgoing = (cb, user, onOutgoingMessage = __onOutgoingMessage) => {
+const onOutgoing = (
+  cb,
+  gun,
+  user,
+  SEA,
+  onOutgoingMessage = __onOutgoingMessage
+) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -370,7 +433,9 @@ const onOutgoing = (cb, user, onOutgoingMessage = __onOutgoingMessage) => {
 
             cb(outgoings);
           },
-          user
+          gun,
+          user,
+          SEA
         );
       }
 
@@ -465,35 +530,40 @@ const onChats = (cb, gun, user, SEA) => {
 
   callCB();
 
-  onOutgoing(outgoings => {
-    for (const outgoing of Object.values(outgoings)) {
-      const recipientPK = outgoing.with;
+  onOutgoing(
+    outgoings => {
+      for (const outgoing of Object.values(outgoings)) {
+        const recipientPK = outgoing.with;
 
-      if (!recipientPKToChat[recipientPK]) {
-        recipientPKToChat[recipientPK] = {
-          messages: [],
-          recipientAvatar: "",
-          recipientDisplayName: recipientPK,
-          recipientPublicKey: recipientPK
-        };
-      }
+        if (!recipientPKToChat[recipientPK]) {
+          recipientPKToChat[recipientPK] = {
+            messages: [],
+            recipientAvatar: "",
+            recipientDisplayName: recipientPK,
+            recipientPublicKey: recipientPK
+          };
+        }
 
-      const messages = recipientPKToChat[recipientPK].messages;
+        const messages = recipientPKToChat[recipientPK].messages;
 
-      for (const [msgK, msg] of Object.entries(outgoing.messages)) {
-        if (!messages.find(m => m.id === msgK)) {
-          messages.push({
-            body: msg.body,
-            id: msgK,
-            outgoing: true,
-            timestamp: msg.timestamp
-          });
+        for (const [msgK, msg] of Object.entries(outgoing.messages)) {
+          if (!messages.find(m => m.id === msgK)) {
+            messages.push({
+              body: msg.body,
+              id: msgK,
+              outgoing: true,
+              timestamp: msg.timestamp
+            });
+          }
         }
       }
-    }
 
-    callCB();
-  }, user);
+      callCB();
+    },
+    gun,
+    user,
+    SEA
+  );
 
   __onUserToIncoming(uti => {
     for (const [recipientPK, incomingFeedID] of Object.entries(uti)) {
