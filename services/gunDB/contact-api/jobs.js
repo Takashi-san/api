@@ -29,11 +29,13 @@ const Key = require("./key");
  * @param {((osr: OnSentRequest, user: UserGUNNode) => void)=} onSentRequestsFactory
  * Pass only for testing purposes.
  * @throws {Error} NOT_AUTH
+ * @param {GUNNode} gun
  * @param {UserGUNNode} user Pass only for testing purposes.
  * @param {ISEA} SEA
  */
 exports.onAcceptedRequests = (
   onSentRequestsFactory = Events.onSentRequests,
+  gun,
   user,
   SEA
 ) => {
@@ -67,32 +69,67 @@ exports.onAcceptedRequests = (
               return;
             }
 
-            const secret = await SEA.secret(user.is.pub, user._.sea);
-            const userPubKey = await SEA.decrypt(encryptedUserPubKey, secret);
-
             const userToIncoming = user.get(Key.USER_TO_INCOMING);
 
-            userToIncoming.get(userPubKey).once(outgoingID => {
-              const receivedOutgoingID = req.response;
+            userToIncoming
+              .get(encryptedUserPubKey)
+              .once(async encryptedIncomingID => {
+                // only set it once. Also prevents attacks if an attacker
+                // modifies old requests
+                if (typeof encryptedIncomingID !== "undefined") {
+                  return;
+                }
 
-              // only set it once. Also prevents attacks if an attacker
-              // modifies old requests
-              if (typeof outgoingID === "undefined") {
-                userToIncoming.get(userPubKey).put(receivedOutgoingID);
+                if (!user.is) {
+                  console.warn("!user.is");
+                  return;
+                }
 
-                return;
-              }
+                /** @type {string} */
+                const requestorEpub = await new Promise((res, rej) => {
+                  gun
+                    .user(req.from)
+                    .get("epub")
+                    .once(epub => {
+                      if (typeof epub !== "string") {
+                        rej(
+                          new Error(
+                            "Expected gun.user(pub).get(epub) to be an string."
+                          )
+                        );
+                      } else {
+                        if (epub.length === 0) {
+                          rej(
+                            new Error(
+                              "Expected gun.user(pub).get(epub) to be a populated string."
+                            )
+                          );
+                        } else {
+                          res(epub);
+                        }
+                      }
+                    });
+                });
 
-              if (typeof outgoingID !== "string") {
-                console.error("non string received");
-                return;
-              }
+                const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+                const ourSecret = await SEA.secret(requestorEpub, user._.sea);
 
-              if (outgoingID.length === 0) {
-                console.error("empty string received");
-                return;
-              }
-            });
+                const receivedEncryptedIncomingID = req.response;
+
+                const receivedIncomingID = await SEA.decrypt(
+                  receivedEncryptedIncomingID,
+                  ourSecret
+                );
+
+                const recryptedIncomingID = await SEA.encrypt(
+                  receivedIncomingID,
+                  mySecret
+                );
+
+                userToIncoming
+                  .get(encryptedUserPubKey)
+                  .put(recryptedIncomingID);
+              });
           });
       }
     }

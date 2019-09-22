@@ -143,27 +143,40 @@ const __onSentRequestToUser = (cb, user, SEA) => {
 /**
  * @param {(userToOutgoing: Record<string, string>) => void} cb
  * @param {UserGUNNode} user Pass only for testing purposes.
+ * @param {ISEA} SEA
  * @returns {void}
  */
-const __onUserToIncoming = (cb, user) => {
+const __onUserToIncoming = (cb, user, SEA) => {
+  if (!user.is) {
+    throw new Error(ErrorCode.NOT_AUTH);
+  }
+
   /** @type {Record<string, string>} */
   const userToOutgoing = {};
 
   user
     .get(Key.USER_TO_INCOMING)
     .map()
-    .on((data, key) => {
-      if (typeof data !== "string") {
+    .on(async (encryptedIncomingID, userPK) => {
+      if (!user.is) {
+        console.warn("!user.is");
+        return;
+      }
+
+      if (typeof encryptedIncomingID !== "string") {
         console.error("got a non string value");
         return;
       }
 
-      if (data.length === 0) {
+      if (encryptedIncomingID.length === 0) {
         console.error("got an empty string value");
         return;
       }
 
-      userToOutgoing[key] = data;
+      const secret = await SEA.secret(user.is.pub, user._.sea);
+      const incomingID = await SEA.decrypt(encryptedIncomingID, secret);
+
+      userToOutgoing[userPK] = incomingID;
 
       cb(userToOutgoing);
     });
@@ -653,9 +666,10 @@ const onChats = (cb, gun, user, SEA) => {
  * @param {(simpleReceivedRequests: SimpleReceivedRequest[]) => void} cb
  * @param {GUNNode} gun
  * @param {UserGUNNode} user
+ * @param {ISEA} SEA
  * @returns {void}
  */
-const onSimplerReceivedRequests = (cb, gun, user) => {
+const onSimplerReceivedRequests = (cb, gun, user, SEA) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -675,7 +689,15 @@ const onSimplerReceivedRequests = (cb, gun, user) => {
   user
     .get(Key.USER_TO_INCOMING)
     .map()
-    .on((_, userPK) => {
+    .on(async (_, encryptedUserPK) => {
+      if (!user.is) {
+        console.warn("!user.is");
+        return;
+      }
+
+      const secret = await SEA.secret(user.is.pub, user._.sea);
+      const userPK = await SEA.decrypt(encryptedUserPK, secret);
+
       requestorsAlreadyAccepted.add(userPK);
     });
 
@@ -767,9 +789,10 @@ const onSimplerReceivedRequests = (cb, gun, user) => {
  * @param {(sentRequests: SimpleSentRequest[]) => void} cb
  * @param {GUNNode} gun
  * @param {UserGUNNode} user
+ * @param {ISEA} SEA
  * @returns {void}
  */
-const onSimplerSentRequests = (cb, gun, user) => {
+const onSimplerSentRequests = (cb, gun, user, SEA) => {
   /**
    * @type {Record<string, Omit<SimpleSentRequest, 'timestamp'> & { timestamp?: undefined|number}>}
    **/
@@ -829,7 +852,15 @@ const onSimplerSentRequests = (cb, gun, user) => {
   user
     .get(Key.USER_TO_INCOMING)
     .map()
-    .on((_, userPK) => {
+    .on(async (_, encryptedUserPK) => {
+      if (!user.is) {
+        console.warn("!user.is");
+        return;
+      }
+
+      const secret = await SEA.secret(user.is.pub, user._.sea);
+      const userPK = await SEA.decrypt(encryptedUserPK, secret);
+
       recipientsThatHaveAcceptedRequest.add(userPK);
 
       callCB();
