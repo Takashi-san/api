@@ -13,6 +13,7 @@ const responseTime = require("response-time");
 const jsonfile = require("jsonfile");
 const server = require("./server");
 const Http = require("axios");
+const getListPage = require("../utils/paginate");
 
 const DEFAULT_MAX_NUM_ROUTES_TO_QUERY = 10;
 
@@ -65,7 +66,7 @@ module.exports = (
 
   const handleError = async (res, err) => {
     const health = await checkHealth();
-    if (health.connectedToLnd) {
+    if (health.LNDStatus.success) {
       if (err) {
         res.send({
           error: err.message.split(": ")[1]
@@ -201,8 +202,8 @@ module.exports = (
                 logger.debug("unlock Error:", unlockErr);
                 unlockErr.error = unlockErr.message;
                 console.log("unlockErr.message", unlockErr.message);
-                return checkHealth().then(healthResponse => {
-                  if (healthResponse.connectedToLnd) {
+                return checkHealth().then(health => {
+                  if (health.LNDStatus.success) {
                     let errorMessage = unlockErr.details;
                     res.status(400);
                     res.send({ errorMessage: unlockErr.message });
@@ -245,8 +246,8 @@ module.exports = (
       console.log(genSeedErr, genSeedResponse);
       if (genSeedErr) {
         logger.debug("GenSeed Error:", genSeedErr);
-        return checkHealth().then(healthResponse => {
-          if (healthResponse.connectedToLnd) {
+        return checkHealth().then(health => {
+          if (health.LNDStatus.success) {
             genSeedErr.error = genSeedErr.message;
             let errorMessage = genSeedErr.details;
             res.status(400);
@@ -273,8 +274,8 @@ module.exports = (
               "initWallet Error:",
               Object.keys(initWalletErr.message)
             );
-            return checkHealth().then(healthResponse => {
-              if (healthResponse.connectedToLnd) {
+            return checkHealth().then(health => {
+              if (health.LNDStatus.success) {
                 let errorMessage = initWalletErr.details;
                 logger.debug("initWallet Error:", initWalletErr);
                 initWalletErr.error = initWalletErr.message;
@@ -399,8 +400,8 @@ module.exports = (
       if (err) {
         console.log("GetInfo Error:", err);
         logger.debug("GetInfo Error:", err);
-        return checkHealth().then(healthResponse => {
-          if (healthResponse.connectedToLnd) {
+        return checkHealth().then(health => {
+          if (health.LNDStatus.success) {
             err.error = err.message;
             res.send(err);
           } else {
@@ -431,8 +432,8 @@ module.exports = (
     ) {
       if (err) {
         logger.debug("GetNodeInfo Error:", err);
-        return checkHealth().then(healthResponse => {
-          if (healthResponse.connectedToLnd) {
+        return checkHealth().then(health => {
+          if (health.LNDStatus.success) {
             err.error = err.message;
             res.send(err);
           } else {
@@ -451,8 +452,8 @@ module.exports = (
     lightning.getNetworkInfo({}, function(err, response) {
       if (err) {
         logger.debug("GetNetworkInfo Error:", err);
-        return checkHealth().then(healthResponse => {
-          if (healthResponse.connectedToLnd) {
+        return checkHealth().then(health => {
+          if (health.LNDStatus.success) {
             err.error = err.message;
             res.send(err);
           } else {
@@ -472,8 +473,8 @@ module.exports = (
     lightning.listPeers({}, function(err, response) {
       if (err) {
         logger.debug("ListPeers Error:", err);
-        return checkHealth().then(healthResponse => {
-          if (healthResponse.connectedToLnd) {
+        return checkHealth().then(health => {
+          if (health.LNDStatus.success) {
             err.error = err.message;
             res.send(err);
           } else {
@@ -493,8 +494,8 @@ module.exports = (
     lightning.newAddress({ type: req.body.type }, function(err, response) {
       if (err) {
         logger.debug("NewAddress Error:", err);
-        return checkHealth().then(healthResponse => {
-          if (healthResponse.connectedToLnd) {
+        return checkHealth().then(health => {
+          if (health.LNDStatus.success) {
             err.error = err.message;
             res.send(err);
           } else {
@@ -512,8 +513,8 @@ module.exports = (
   // connect peer to lnd node
   app.post("/api/lnd/connectpeer", (req, res) => {
     if (req.limituser) {
-      return checkHealth().then(healthResponse => {
-        if (healthResponse.connectedToLnd) {
+      return checkHealth().then(health => {
+        if (health.LNDStatus.success) {
           return res.sendStatus(403); // forbidden
         } else {
           res.status(500);
@@ -542,8 +543,8 @@ module.exports = (
   // disconnect peer from lnd node
   app.post("/api/lnd/disconnectpeer", (req, res) => {
     if (req.limituser) {
-      return checkHealth().then(healthResponse => {
-        if (healthResponse.connectedToLnd) {
+      return checkHealth().then(health => {
+        if (health.LNDStatus.success) {
           return res.sendStatus(403); // forbidden
         } else {
           res.status(500);
@@ -571,8 +572,8 @@ module.exports = (
     lightning.listChannels({}, function(err, response) {
       if (err) {
         logger.debug("ListChannels Error:", err);
-        return checkHealth().then(healthResponse => {
-          if (healthResponse.connectedToLnd) {
+        return checkHealth().then(health => {
+          if (health.LNDStatus.success) {
             err.error = err.message;
             res.send(err);
           } else {
@@ -592,8 +593,8 @@ module.exports = (
     lightning.pendingChannels({}, function(err, response) {
       if (err) {
         logger.debug("PendingChannels Error:", err);
-        return checkHealth().then(healthResponse => {
-          if (healthResponse.connectedToLnd) {
+        return checkHealth().then(health => {
+          if (health.LNDStatus.success) {
             err.error = err.message;
             res.send(err);
           } else {
@@ -610,44 +611,53 @@ module.exports = (
 
   // get lnd node payments list
   app.get("/api/lnd/listpayments", (req, res) => {
-    lightning.listPayments({}, function(err, response) {
+    const { itemsPerPage, page, paginate = true } = req.body;
+    lightning.listPayments({}, async (err, { payments = [] } = {}) => {
       if (err) {
         logger.debug("ListPayments Error:", err);
-        return checkHealth().then(healthResponse => {
-          if (healthResponse.connectedToLnd) {
-            err.error = err.message;
-            res.send(err);
-          } else {
-            res.status(500);
-            res.send({ errorMessage: "LND is down" });
-          }
-        });
+        const health = await checkHealth();
+        if (health.LNDStatus.success) {
+          err.error = err.message;
+          res.status(400).send({ message: err.message, success: false });
+        } else {
+          res.status(500);
+          res.send({ message: health.LNDStatus.message, success: false });
+        }
       } else {
-        logger.debug("ListPayments:", response);
-        res.json(response);
+        logger.debug("ListPayments:", payments);
+        if (paginate) {
+          res.json(getListPage({ entries: payments, itemsPerPage, page }));
+        } else {
+          res.json({ payments });
+        }
       }
     });
   });
 
   // get lnd node invoices list
   app.get("/api/lnd/listinvoices", (req, res) => {
-    lightning.listInvoices({}, function(err, response) {
-      if (err) {
-        logger.debug("ListInvoices Error:", err);
-        return checkHealth().then(healthResponse => {
-          if (healthResponse.connectedToLnd) {
+    const { page, itemsPerPage, reversed = true } = req.body;
+    const offset = (page - 1) * itemsPerPage;
+    const limit = page * itemsPerPage;
+    lightning.listInvoices(
+      { reversed, index_offset: offset, num_max_invoices: itemsPerPage },
+      async (err, response) => {
+        if (err) {
+          logger.debug("ListInvoices Error:", err);
+          const health = await checkHealth();
+          if (health.LNDStatus.success) {
             err.error = err.message;
-            res.send(err);
+            res.send({ message: err.message, success: false });
           } else {
             res.status(500);
-            res.send({ errorMessage: "LND is down" });
+            res.send({ message: health.LNDStatus.message, success: false });
           }
-        });
-      } else {
-        logger.debug("ListInvoices:", response);
-        res.json(response);
+        } else {
+          logger.debug("ListInvoices:", response);
+          res.json({ entries: response.invoices, success: true });
+        }
       }
-    });
+    );
   });
 
   // get lnd node forwarding history
@@ -655,8 +665,8 @@ module.exports = (
     lightning.forwardingHistory({}, function(err, response) {
       if (err) {
         logger.debug("ForwardingHistory Error:", err);
-        return checkHealth().then(healthResponse => {
-          if (healthResponse.connectedToLnd) {
+        return checkHealth().then(health => {
+          if (health.LNDStatus.success) {
             err.error = err.message;
             res.send(err);
           } else {
@@ -676,8 +686,8 @@ module.exports = (
     lightning.walletBalance({}, function(err, response) {
       if (err) {
         logger.debug("WalletBalance Error:", err);
-        return checkHealth().then(healthResponse => {
-          if (healthResponse.connectedToLnd) {
+        return checkHealth().then(health => {
+          if (health.LNDStatus.success) {
             err.error = err.message;
             res.send(err);
           } else {
@@ -697,8 +707,8 @@ module.exports = (
     lightning.channelBalance({}, function(err, response) {
       if (err) {
         logger.debug("ChannelBalance Error:", err);
-        return checkHealth().then(healthResponse => {
-          if (healthResponse.connectedToLnd) {
+        return checkHealth().then(health => {
+          if (health.LNDStatus.success) {
             err.error = err.message;
             res.send(err);
           } else {
@@ -717,8 +727,8 @@ module.exports = (
     lightning.channelBalance({}, function(err, response) {
       if (err) {
         logger.debug("ChannelBalance Error:", err);
-        return checkHealth().then(healthResponse => {
-          if (healthResponse.connectedToLnd) {
+        return checkHealth().then(health => {
+          if (health.LNDStatus.success) {
             err.error = err.message;
             res.send(err);
           } else {
@@ -736,8 +746,8 @@ module.exports = (
   // openchannel
   app.post("/api/lnd/openchannel", (req, res) => {
     if (req.limituser) {
-      return checkHealth().then(healthResponse => {
-        if (healthResponse.connectedToLnd) {
+      return checkHealth().then(health => {
+        if (health.LNDStatus.success) {
           res.sendStatus(403); // forbidden
         } else {
           res.status(500);
@@ -756,8 +766,8 @@ module.exports = (
         if (err) {
           console.log("OpenChannelRequest Error:", err);
           logger.debug("OpenChannelRequest Error:", err);
-          return checkHealth().then(healthResponse => {
-            if (healthResponse.connectedToLnd) {
+          return checkHealth().then(health => {
+            if (health.LNDStatus.success) {
               err.error = err.message;
               res.send(err);
             } else {
@@ -778,8 +788,8 @@ module.exports = (
   // closechannel
   app.post("/api/lnd/closechannel", (req, res) => {
     if (req.limituser) {
-      return checkHealth().then(healthResponse => {
-        if (healthResponse.connectedToLnd) {
+      return checkHealth().then(health => {
+        if (health.LNDStatus.success) {
           // return res.sendStatus(403); // forbidden
           res.sendStatus(403); // forbidden
         } else {
@@ -801,8 +811,8 @@ module.exports = (
       lightning.closeChannel(closeChannelRequest, function(err, response) {
         if (err) {
           console.log("CloseChannelRequest Error:", err);
-          return checkHealth().then(healthResponse => {
-            if (healthResponse.connectedToLnd) {
+          return checkHealth().then(health => {
+            if (health.LNDStatus.success) {
               logger.debug("CloseChannelRequest Error:", err);
               err.error = err.message;
               res.send(err);
@@ -823,8 +833,8 @@ module.exports = (
   // sendpayment
   app.post("/api/lnd/sendpayment", (req, res) => {
     if (req.limituser) {
-      return checkHealth().then(healthResponse => {
-        if (healthResponse.connectedToLnd) {
+      return checkHealth().then(health => {
+        if (health.LNDStatus.success) {
           res.sendStatus(403); // forbidden
         } else {
           res.status(500);
@@ -840,8 +850,8 @@ module.exports = (
       lightning.sendPaymentSync(paymentRequest, function(err, response) {
         if (err) {
           logger.debug("SendPayment Error:", err);
-          return checkHealth().then(healthResponse => {
-            if (healthResponse.connectedToLnd) {
+          return checkHealth().then(health => {
+            if (health.LNDStatus.success) {
               err.error = err.message;
               res.send(err);
             } else {
@@ -860,8 +870,8 @@ module.exports = (
   // addinvoice
   app.post("/api/lnd/addinvoice", (req, res) => {
     if (req.limituser) {
-      return checkHealth().then(healthResponse => {
-        if (healthResponse.connectedToLnd) {
+      return checkHealth().then(health => {
+        if (health.LNDStatus.success) {
           res.sendStatus(403); // forbidden
         } else {
           res.status(500);
@@ -879,8 +889,8 @@ module.exports = (
       lightning.addInvoice(invoiceRequest, function(err, response) {
         if (err) {
           logger.debug("AddInvoice Error:", err);
-          return checkHealth().then(healthResponse => {
-            if (healthResponse.connectedToLnd) {
+          return checkHealth().then(health => {
+            if (health.LNDStatus.success) {
               err.error = err.message;
               res.send(err);
             } else {
@@ -899,8 +909,8 @@ module.exports = (
   // signmessage
   app.post("/api/lnd/signmessage", (req, res) => {
     if (req.limituser) {
-      return checkHealth().then(healthResponse => {
-        if (healthResponse.connectedToLnd) {
+      return checkHealth().then(health => {
+        if (health.LNDStatus.success) {
           res.sendStatus(403); // forbidden
         } else {
           res.status(500);
@@ -913,8 +923,8 @@ module.exports = (
         function(err, response) {
           if (err) {
             logger.debug("SignMessage Error:", err);
-            return checkHealth().then(healthResponse => {
-              if (healthResponse.connectedToLnd) {
+            return checkHealth().then(health => {
+              if (health.LNDStatus.success) {
                 err.error = err.message;
                 res.send(err);
               } else {
@@ -938,8 +948,8 @@ module.exports = (
       function(err, response) {
         if (err) {
           logger.debug("VerifyMessage Error:", err);
-          return checkHealth().then(healthResponse => {
-            if (healthResponse.connectedToLnd) {
+          return checkHealth().then(health => {
+            if (health.LNDStatus.success) {
               err.error = err.message;
               res.send(err);
             } else {
@@ -958,8 +968,8 @@ module.exports = (
   // sendcoins
   app.post("/api/lnd/sendcoins", (req, res) => {
     if (req.limituser) {
-      return checkHealth().then(healthResponse => {
-        if (healthResponse.connectedToLnd) {
+      return checkHealth().then(health => {
+        if (health.LNDStatus.success) {
           res.sendStatus(403); // forbidden
         } else {
           res.status(500);
@@ -972,8 +982,8 @@ module.exports = (
       lightning.sendCoins(sendCoinsRequest, function(err, response) {
         if (err) {
           logger.debug("SendCoins Error:", err);
-          return checkHealth().then(healthResponse => {
-            if (healthResponse.connectedToLnd) {
+          return checkHealth().then(health => {
+            if (health.LNDStatus.success) {
               err.error = err.message;
               res.send(err);
             } else {
@@ -998,8 +1008,8 @@ module.exports = (
       function(err, response) {
         if (err) {
           logger.debug("QueryRoute Error:", err);
-          return checkHealth().then(healthResponse => {
-            if (healthResponse.connectedToLnd) {
+          return checkHealth().then(health => {
+            if (health.LNDStatus.success) {
               err.error = err.message;
               res.send(err);
             } else {
@@ -1027,7 +1037,7 @@ module.exports = (
       async (err, fee) => {
         if (err) {
           const health = await checkHealth();
-          if (health.connectedToLnd) {
+          if (health.LNDStatus.success) {
             res.send({
               error: err.message
             });
@@ -1062,12 +1072,17 @@ module.exports = (
   });
 
   app.get("/api/lnd/transactions", (req, res) => {
-    lightning.getTransactions({}, async (err, transactions) => {
+    const { page, paginate = true, itemsPerPage } = req.body;
+    lightning.getTransactions({}, async (err, { transactions = [] } = {}) => {
       if (err) {
         return handleError(res, err);
       } else {
         logger.debug("Transactions:", transactions);
-        res.json(transactions);
+        if (paginate) {
+          res.json(getListPage({ entries: transactions, itemsPerPage, page }));
+        } else {
+          res.json({ transactions });
+        }
       }
     });
   });
