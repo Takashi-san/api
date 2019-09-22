@@ -253,11 +253,26 @@ const acceptRequest = (
         })
         .then(
           () =>
-            new Promise((res, rej) => {
+            new Promise(async (res, rej) => {
+              if (!user.is) {
+                console.warn("!user.is");
+                return;
+              }
+
+              const secret = await SEA.secret(user.is.pub, user._.sea);
+              const encryptedIncomingID = await SEA.encrypt(
+                handshakeRequest.response,
+                secret
+              );
+              const encryptedUserPK = await SEA.encrypt(
+                handshakeRequest.from,
+                secret
+              );
+
               user
                 .get(Key.USER_TO_INCOMING)
-                .get(handshakeRequest.from)
-                .put(handshakeRequest.response, ack => {
+                .get(encryptedUserPK)
+                .put(encryptedIncomingID, ack => {
                   if (ack.err) {
                     rej(new Error(ack.err));
                   } else {
