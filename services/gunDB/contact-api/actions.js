@@ -244,7 +244,7 @@ const acceptRequest = (
 
           return responseToRequestEncryptorAndPutter(
             requestID,
-            "$$_TEST",
+            handshakeRequest.from,
             outgoingFeedID,
             gun,
             user,
