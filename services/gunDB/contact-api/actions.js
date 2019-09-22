@@ -253,13 +253,13 @@ const acceptRequest = (
         })
         .then(
           () =>
-            new Promise(res => {
+            new Promise((res, rej) => {
               user
                 .get(Key.USER_TO_INCOMING)
                 .get(handshakeRequest.from)
                 .put(handshakeRequest.response, ack => {
                   if (ack.err) {
-                    throw new Error(ack.err);
+                    rej(new Error(ack.err));
                   } else {
                     res();
                   }
