@@ -129,16 +129,20 @@ const __encryptAndPutResponseToRequest = async (
  * message for it also cannot be created. These errors aren't coded as they are
  * not meant to be caught outside of this module.
  * @param {UserGUNNode} user
+ * @param {ISEA} SEA
  * @returns {Promise<string>}
  */
-const __createOutgoingFeed = async (withPublicKey, user) => {
+const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
 
+  const secret = await SEA.secret(user.is.pub, user._.sea);
+  const encryptedRecipientPublicKey = await SEA.encrypt(withPublicKey, secret);
+
   /** @type {PartialOutgoing} */
   const newPartialOutgoingFeed = {
-    with: withPublicKey
+    with: encryptedRecipientPublicKey
   };
 
   /** @type {GUNNode} */
@@ -234,7 +238,7 @@ const acceptRequest = (
       /** @type {string} */
       let outgoingFeedID;
 
-      outgoingFeedCreator(handshakeRequest.from, user)
+      outgoingFeedCreator(handshakeRequest.from, user, SEA)
         .then(outfid => {
           outgoingFeedID = outfid;
 
