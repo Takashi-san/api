@@ -477,7 +477,11 @@ const sendHandshakeRequest = async (
     throw new TypeError("recipientPublicKey is an string of length 0");
   }
 
-  const outgoingFeedID = await __createOutgoingFeed(recipientPublicKey, user);
+  const outgoingFeedID = await __createOutgoingFeed(
+    recipientPublicKey,
+    user,
+    SEA
+  );
 
   await new Promise((res, rej) => {
     user
