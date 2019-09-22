@@ -560,11 +560,17 @@ const sendHandshakeRequest = async (
     });
   });
 
+  const ownSecret = await SEA.secret(user.is.pub, user._.sea);
+  const encryptedRecipientPublicKey = await SEA.encrypt(
+    recipientPublicKey,
+    ownSecret
+  );
+
   return new Promise((res, rej) => {
     user
       .get(Key.REQUEST_TO_USER)
       .get(/** @type {string} */ (handshakeRequest._.get))
-      .put(recipientPublicKey, ack => {
+      .put(encryptedRecipientPublicKey, ack => {
         if (ack.err) {
           rej(
             new Error(

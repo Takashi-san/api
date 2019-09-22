@@ -16,6 +16,7 @@ const Key = require("./key");
 
 /**
  * @typedef {import('./SimpleGUN').GUNNode} GUNNode
+ * @typedef {import('./SimpleGUN').ISEA} ISEA
  * @typedef {import('./schema').HandshakeRequest} HandshakeRequest
  * @typedef {import('./SimpleGUN').UserGUNNode} UserGUNNode
  */
@@ -29,10 +30,12 @@ const Key = require("./key");
  * Pass only for testing purposes.
  * @throws {Error} NOT_AUTH
  * @param {UserGUNNode} user Pass only for testing purposes.
+ * @param {ISEA} SEA
  */
 exports.onAcceptedRequests = (
   onSentRequestsFactory = Events.onSentRequests,
-  user
+  user,
+  SEA
 ) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
@@ -46,18 +49,26 @@ exports.onAcceptedRequests = (
         user
           .get(Key.REQUEST_TO_USER)
           .get(reqKey)
-          .once(userPubKey => {
-            if (typeof userPubKey !== "string") {
-              if (typeof userPubKey !== "undefined") {
+          .once(async encryptedUserPubKey => {
+            if (typeof encryptedUserPubKey !== "string") {
+              if (typeof encryptedUserPubKey !== "undefined") {
                 console.error("non string received");
               }
               return;
             }
 
-            if (userPubKey.length === 0) {
+            if (encryptedUserPubKey.length === 0) {
               console.error("empty string received");
               return;
             }
+
+            if (!user.is) {
+              console.warn("!user.is");
+              return;
+            }
+
+            const secret = await SEA.secret(user.is.pub, user._.sea);
+            const userPubKey = await SEA.decrypt(encryptedUserPubKey, secret);
 
             const userToIncoming = user.get(Key.USER_TO_INCOMING);
 

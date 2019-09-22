@@ -101,9 +101,10 @@ const __onOutgoingMessage = async (outgoingKey, cb, gun, user, SEA) => {
  * Maps a sent request ID to the public key of the user it was sent to.
  * @param {(requestToUser: Record<string, string>) => void} cb
  * @param {UserGUNNode} user Pass only for testing purposes.
+ * @param {ISEA} SEA
  * @returns {void}
  */
-const __onSentRequestToUser = (cb, user) => {
+const __onSentRequestToUser = (cb, user, SEA) => {
   /** @type {Record<string, string>} */
   const requestToUser = {};
 
@@ -114,7 +115,7 @@ const __onSentRequestToUser = (cb, user) => {
   user
     .get(Key.REQUEST_TO_USER)
     .map()
-    .on((userPK, requestKey) => {
+    .on(async (userPK, requestKey) => {
       if (typeof userPK !== "string") {
         console.error("got a non string value");
         return;
@@ -125,7 +126,15 @@ const __onSentRequestToUser = (cb, user) => {
         return;
       }
 
-      requestToUser[requestKey] = userPK;
+      if (!user.is) {
+        console.warn("!user.is");
+        return;
+      }
+
+      const secret = await SEA.secret(user.is.pub, user._.sea);
+      const decryptedUserPK = await SEA.decrypt(userPK, secret);
+
+      requestToUser[requestKey] = decryptedUserPK;
 
       cb(requestToUser);
     });
