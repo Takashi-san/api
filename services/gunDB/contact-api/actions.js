@@ -207,103 +207,92 @@ const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
  * gun's part.
  * @returns {Promise<void>}
  */
-const acceptRequest = (
+const acceptRequest = async (
   requestID,
   gun,
   user,
   SEA,
   outgoingFeedCreator = __createOutgoingFeed,
   responseToRequestEncryptorAndPutter = __encryptAndPutResponseToRequest
-) =>
-  new Promise((resolve, reject) => {
-    const u = /** @type {UserGUNNode} */ user;
+) => {
+  if (!user.is) {
+    throw new Error(ErrorCode.NOT_AUTH);
+  }
 
-    if (!u.is) {
-      throw new Error(ErrorCode.NOT_AUTH);
-    }
+  const requestNode = user.get(Key.CURRENT_HANDSHAKE_NODE).get(requestID);
 
-    const requestNode = u.get(Key.CURRENT_HANDSHAKE_NODE).get(requestID);
+  // this detects an empty node
+  if (typeof requestNode._.put === "undefined") {
+    throw new Error(ErrorCode.TRIED_TO_ACCEPT_AN_INVALID_REQUEST);
+  }
 
-    // this detects an empty node
-    if (typeof requestNode._.put === "undefined") {
-      throw new Error(ErrorCode.TRIED_TO_ACCEPT_AN_INVALID_REQUEST);
-    }
-
-    requestNode.once(handshakeRequest => {
-      if (!isHandshakeRequest(handshakeRequest)) {
-        reject(new Error(ErrorCode.TRIED_TO_ACCEPT_AN_INVALID_REQUEST));
+  /** @type {HandshakeRequest} */
+  const handshakeRequest = await new Promise((res, rej) => {
+    requestNode.once(hr => {
+      if (!isHandshakeRequest(hr)) {
+        rej(new Error(ErrorCode.TRIED_TO_ACCEPT_AN_INVALID_REQUEST));
         return;
       }
 
-      /** @type {string} */
-      let outgoingFeedID;
-
-      outgoingFeedCreator(handshakeRequest.from, user, SEA)
-        .then(outfid => {
-          outgoingFeedID = outfid;
-
-          return responseToRequestEncryptorAndPutter(
-            requestID,
-            handshakeRequest.from,
-            outgoingFeedID,
-            gun,
-            user,
-            SEA
-          );
-        })
-        .then(
-          () =>
-            new Promise(async (res, rej) => {
-              if (!user.is) {
-                console.warn("!user.is");
-                return;
-              }
-
-              const secret = await SEA.secret(user.is.pub, user._.sea);
-              const encryptedIncomingID = await SEA.encrypt(
-                handshakeRequest.response,
-                secret
-              );
-              const encryptedUserPK = await SEA.encrypt(
-                handshakeRequest.from,
-                secret
-              );
-
-              user
-                .get(Key.USER_TO_INCOMING)
-                .get(encryptedUserPK)
-                .put(encryptedIncomingID, ack => {
-                  if (ack.err) {
-                    rej(new Error(ack.err));
-                  } else {
-                    res();
-                  }
-                });
-            })
-        )
-        .then(
-          () =>
-            new Promise(res => {
-              user
-                .get(Key.RECIPIENT_TO_OUTGOING)
-                .get(handshakeRequest.from)
-                .put(outgoingFeedID, ack => {
-                  if (ack.err) {
-                    throw new Error(ack.err);
-                  } else {
-                    res();
-                  }
-                });
-            })
-        )
-        .then(() => {
-          resolve();
-        })
-        .catch(() => {
-          reject(new Error(ErrorCode.COULDNT_ACCEPT_REQUEST));
-        });
+      res(hr);
     });
   });
+
+  const outgoingFeedID = await outgoingFeedCreator(
+    handshakeRequest.from,
+    user,
+    SEA
+  );
+
+  await responseToRequestEncryptorAndPutter(
+    requestID,
+    handshakeRequest.from,
+    outgoingFeedID,
+    gun,
+    user,
+    SEA
+  );
+
+  await outgoingFeedCreator(handshakeRequest.from, user, SEA);
+
+  const mySecret = await SEA.secret(user._.sea.pub, user._.sea);
+
+  const encryptedForMeIncomingID = await SEA.encrypt(
+    handshakeRequest.response,
+    mySecret
+  );
+
+  const encryptedForMeRequestorPK = await SEA.encrypt(
+    handshakeRequest.from,
+    mySecret
+  );
+
+  await new Promise((res, rej) => {
+    user
+      .get(Key.USER_TO_INCOMING)
+      .get(encryptedForMeRequestorPK)
+      .put(encryptedForMeIncomingID, ack => {
+        if (ack.err) {
+          rej(new Error(ack.err));
+        } else {
+          res();
+        }
+      });
+  });
+
+  await new Promise((res, rej) => {
+    user
+      .get(Key.RECIPIENT_TO_OUTGOING)
+      .get(handshakeRequest.from)
+      .put(outgoingFeedID, ack => {
+        if (ack.err) {
+          rej(new Error(ack.err));
+        } else {
+          res();
+        }
+      });
+  });
+};
 
 /**
  * @param {string} user
