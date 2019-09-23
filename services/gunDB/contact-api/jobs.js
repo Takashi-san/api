@@ -32,8 +32,9 @@ const Key = require("./key");
  * @param {GUNNode} gun
  * @param {UserGUNNode} user Pass only for testing purposes.
  * @param {ISEA} SEA
+ * @returns {Promise<void>}
  */
-exports.onAcceptedRequests = (
+exports.onAcceptedRequests = async (
   onSentRequestsFactory = Events.onSentRequests,
   gun,
   user,
@@ -43,94 +44,115 @@ exports.onAcceptedRequests = (
     throw new Error(ErrorCode.NOT_AUTH);
   }
 
-  onSentRequestsFactory(sentRequests => {
+  // Used only for decrypting request-to-user-map
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+
+  onSentRequestsFactory(async sentRequests => {
     for (const [reqKey, req] of Object.entries(sentRequests)) {
-      // TODO: check here if the response of the handshake request has been
-      // overwritten by the recipient.
-      if (req.response.indexOf("$$_TEST_") === 0) {
-        user
-          .get(Key.REQUEST_TO_USER)
-          .get(reqKey)
-          .once(async encryptedUserPubKey => {
-            if (typeof encryptedUserPubKey !== "string") {
-              if (typeof encryptedUserPubKey !== "undefined") {
-                console.error("non string received");
+      try {
+        /** @type {string|undefined} */
+        const recipientPub = await new Promise((res, rej) => {
+          user
+            .get(Key.REQUEST_TO_USER)
+            .get(reqKey)
+            .once(async userPub => {
+              if (typeof userPub === "undefined") {
+                res(undefined);
+                return;
               }
-              return;
-            }
 
-            if (encryptedUserPubKey.length === 0) {
-              console.error("empty string received");
-              return;
-            }
+              if (typeof userPub !== "string") {
+                rej(
+                  new TypeError(
+                    "typeof userPub !== 'string' && typeof userPub !== 'undefined'"
+                  )
+                );
+                return;
+              }
 
-            if (!user.is) {
-              console.warn("!user.is");
-              return;
-            }
+              if (userPub.length === 0) {
+                rej(new TypeError("userPub.length === 0"));
+                return;
+              }
 
-            const userToIncoming = user.get(Key.USER_TO_INCOMING);
+              res(await SEA.decrypt(userPub, mySecret));
+            });
+        });
 
-            userToIncoming
-              .get(encryptedUserPubKey)
-              .once(async encryptedIncomingID => {
-                // only set it once. Also prevents attacks if an attacker
-                // modifies old requests
-                if (typeof encryptedIncomingID !== "undefined") {
-                  return;
+        if (typeof recipientPub === "undefined") {
+          throw new TypeError("typeof recipientEpub === 'undefined'");
+        }
+
+        /** @type {string} */
+        const recipientEpub = await new Promise((res, rej) => {
+          gun
+            .user(recipientPub)
+            .get("epub")
+            .once(epub => {
+              if (typeof epub !== "string") {
+                rej(
+                  new TypeError(
+                    "Expected gun.user(pub).get(epub) to be an string."
+                  )
+                );
+              } else {
+                if (epub.length === 0) {
+                  rej(
+                    new TypeError(
+                      "Expected gun.user(pub).get(epub) to be a populated string."
+                    )
+                  );
                 }
 
-                if (!user.is) {
-                  console.warn("!user.is");
-                  return;
-                }
+                res(epub);
+              }
+            });
+        });
 
-                /** @type {string} */
-                const requestorEpub = await new Promise((res, rej) => {
-                  gun
-                    .user(req.from)
-                    .get("epub")
-                    .once(epub => {
-                      if (typeof epub !== "string") {
-                        rej(
-                          new Error(
-                            "Expected gun.user(pub).get(epub) to be an string."
-                          )
-                        );
-                      } else {
-                        if (epub.length === 0) {
-                          rej(
-                            new Error(
-                              "Expected gun.user(pub).get(epub) to be a populated string."
-                            )
-                          );
-                        } else {
-                          res(epub);
-                        }
-                      }
-                    });
-                });
+        // The response can be decrypted with the same secret regardless of who
+        // wrote to it last (see HandshakeRequest definition).
+        const ourSecret = await SEA.secret(recipientEpub, user._.sea);
 
-                const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
-                const ourSecret = await SEA.secret(requestorEpub, user._.sea);
+        // This could be our feed ID for the recipient, or the recipient's feed
+        // id if he accepted the request.
+        const feedID = await SEA.decrypt(req.response, ourSecret);
 
-                const receivedEncryptedIncomingID = req.response;
+        // Check that this feed exists on the recipient's outgoing feeds
+        const wasAccepted = await new Promise(res => {
+          gun
+            .user(recipientPub)
+            .get(Key.OUTGOINGS)
+            .get(feedID)
+            .once(feed => {
+              res(typeof feed !== "undefined");
+            });
+        });
 
-                const receivedIncomingID = await SEA.decrypt(
-                  receivedEncryptedIncomingID,
-                  ourSecret
-                );
+        if (!wasAccepted) {
+          return;
+        }
 
-                const recryptedIncomingID = await SEA.encrypt(
-                  receivedIncomingID,
-                  mySecret
-                );
+        const encryptedUserPub = await SEA.encrypt(recipientPub, mySecret);
+        const requestToUserRecord = user.get(Key.REQUEST_TO_USER).get(reqKey);
+        const userToIncomingRecord = user
+          .get(Key.USER_TO_INCOMING)
+          .get(encryptedUserPub);
 
-                userToIncoming
-                  .get(encryptedUserPubKey)
-                  .put(recryptedIncomingID);
-              });
+        const alreadyExists = await new Promise(res => {
+          userToIncomingRecord.once(feedIDRecord => {
+            res(typeof feedIDRecord !== "undefined");
           });
+        });
+
+        // only set it once. Also prevents attacks if an attacker
+        // modifies old requests
+        if (alreadyExists) {
+          return;
+        }
+
+        requestToUserRecord.put(encryptedUserPub);
+      } catch (e) {
+        console.warn(`Error inside Jobs.onAcceptedRequests: ${e.message}`);
       }
     }
   }, user);
