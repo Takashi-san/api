@@ -609,20 +609,60 @@ module.exports = (
     });
   });
 
+  app.get("/api/lnd/unifiedTrx", (req, res) => {
+    const { itemsPerPage, page, reversed = true } = req.body;
+    const offset = (page - 1) * itemsPerPage;
+    lightning.listPayments({}, async (err, { payments = [] } = {}) => {
+      if (err) {
+        return handleError(res, err);
+      }
+
+      lightning.listInvoices(
+        { reversed, index_offset: offset, num_max_invoices: itemsPerPage },
+        async (err, { invoices, last_index_offset }) => {
+          if (err) {
+            return handleError(res, err);
+          }
+
+          lightning.getTransactions(
+            {},
+            async (err, { transactions = [] } = {}) => {
+              if (err) {
+                return handleError(res, err);
+              }
+
+              res.json({
+                transactions: getListPage({
+                  entries: transactions,
+                  itemsPerPage,
+                  page
+                }),
+                payments: getListPage({
+                  entries: payments,
+                  itemsPerPage,
+                  page
+                }),
+                invoices: {
+                  entries: invoices,
+                  page,
+                  totalPages: Math.ceil(last_index_offset / itemsPerPage),
+                  totalItems: last_index_offset
+                }
+              });
+            }
+          );
+        }
+      );
+    });
+  });
+
   // get lnd node payments list
   app.get("/api/lnd/listpayments", (req, res) => {
     const { itemsPerPage, page, paginate = true } = req.body;
     lightning.listPayments({}, async (err, { payments = [] } = {}) => {
       if (err) {
         logger.debug("ListPayments Error:", err);
-        const health = await checkHealth();
-        if (health.LNDStatus.success) {
-          err.error = err.message;
-          res.status(400).send({ message: err.message, success: false });
-        } else {
-          res.status(500);
-          res.send({ message: health.LNDStatus.message, success: false });
-        }
+        handleError(res, err);
       } else {
         logger.debug("ListPayments:", payments);
         if (paginate) {
@@ -641,7 +681,7 @@ module.exports = (
     const limit = page * itemsPerPage;
     lightning.listInvoices(
       { reversed, index_offset: offset, num_max_invoices: itemsPerPage },
-      async (err, response) => {
+      async (err, { invoices, last_index_offset }) => {
         if (err) {
           logger.debug("ListInvoices Error:", err);
           const health = await checkHealth();
@@ -654,7 +694,12 @@ module.exports = (
           }
         } else {
           logger.debug("ListInvoices:", response);
-          res.json({ entries: response.invoices, success: true });
+          res.json({
+            entries: invoices,
+            page,
+            totalPages: Math.ceil(last_index_offset / itemsPerPage),
+            success: true
+          });
         }
       }
     );
