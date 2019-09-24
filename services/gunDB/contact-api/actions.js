@@ -137,7 +137,7 @@ const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
     throw new Error(ErrorCode.NOT_AUTH);
   }
 
-  const secret = await SEA.secret(user.is.pub, user._.sea);
+  const secret = await SEA.secret(user._.sea.epub, user._.sea);
   const encryptedRecipientPublicKey = await SEA.encrypt(withPublicKey, secret);
 
   /** @type {PartialOutgoing} */
