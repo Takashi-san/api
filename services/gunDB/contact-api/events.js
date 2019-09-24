@@ -33,24 +33,30 @@ const __onOutgoingMessage = async (outgoingKey, cb, gun, user, SEA) => {
     throw new Error(ErrorCode.NOT_AUTH);
   }
 
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
   const outgoing = user.get(Key.OUTGOINGS).get(outgoingKey);
 
   /** @type {string} */
-  const recipientPublicKey = await new Promise((res, rej) => {
-    outgoing.get("with").once(rpk => {
-      if (typeof rpk !== "string") {
+  const encryptedForMeRecipientPublicKey = await new Promise((res, rej) => {
+    outgoing.get("with").once(erpk => {
+      if (typeof erpk !== "string") {
         rej(new TypeError("Expected outgoing.get('with') to be an string."));
       } else {
-        if (rpk.length === 0) {
+        if (erpk.length === 0) {
           rej(
             new TypeError("Expected outgoing.get('with') to be a populated.")
           );
         } else {
-          res(rpk);
+          res(erpk);
         }
       }
     });
   });
+
+  const recipientPublicKey = await SEA.decrypt(
+    encryptedForMeRecipientPublicKey,
+    mySecret
+  );
 
   /** @type {string} */
   const recipientEpub = await new Promise((res, rej) => {
@@ -73,7 +79,7 @@ const __onOutgoingMessage = async (outgoingKey, cb, gun, user, SEA) => {
       });
   });
 
-  const secret = await SEA.secret(recipientEpub, user._.sea);
+  const ourSecret = await SEA.secret(recipientEpub, user._.sea);
 
   outgoing
     .get(Key.MESSAGES)
@@ -85,7 +91,7 @@ const __onOutgoingMessage = async (outgoingKey, cb, gun, user, SEA) => {
       }
 
       const encryptedBody = msg.body;
-      const decryptedBody = await SEA.decrypt(encryptedBody, secret);
+      const decryptedBody = await SEA.decrypt(encryptedBody, ourSecret);
 
       cb(
         {
