@@ -51,7 +51,7 @@ exports.onAcceptedRequests = async (
     for (const [reqKey, req] of Object.entries(sentRequests)) {
       try {
         /** @type {string|undefined} */
-        const recipientPub = await new Promise((res, rej) => {
+        const encryptedForMeRecipientPub = await new Promise((res, rej) => {
           user
             .get(Key.REQUEST_TO_USER)
             .get(reqKey)
@@ -75,13 +75,20 @@ exports.onAcceptedRequests = async (
                 return;
               }
 
-              res(await SEA.decrypt(userPub, mySecret));
+              res(userPub);
             });
         });
 
-        if (typeof recipientPub === "undefined") {
-          throw new TypeError("typeof recipientEpub === 'undefined'");
+        if (typeof encryptedForMeRecipientPub === "undefined") {
+          throw new TypeError(
+            "typeof encryptedForMeRecipientPub === 'undefined'"
+          );
         }
+
+        const recipientPub = await SEA.decrypt(
+          encryptedForMeRecipientPub,
+          mySecret
+        );
 
         /** @type {string} */
         const recipientEpub = await new Promise((res, rej) => {
@@ -132,11 +139,13 @@ exports.onAcceptedRequests = async (
           return;
         }
 
-        const encryptedUserPub = await SEA.encrypt(recipientPub, mySecret);
-        const requestToUserRecord = user.get(Key.REQUEST_TO_USER).get(reqKey);
+        const encryptedForMeRequestID = await SEA.encrypt(reqKey, mySecret);
+        const requestToUserRecord = user
+          .get(Key.REQUEST_TO_USER)
+          .get(encryptedForMeRequestID);
         const userToIncomingRecord = user
           .get(Key.USER_TO_INCOMING)
-          .get(encryptedUserPub);
+          .get(encryptedForMeRecipientPub);
 
         const alreadyExists = await new Promise(res => {
           userToIncomingRecord.once(feedIDRecord => {
@@ -150,7 +159,7 @@ exports.onAcceptedRequests = async (
           return;
         }
 
-        requestToUserRecord.put(encryptedUserPub);
+        requestToUserRecord.put(encryptedForMeRecipientPub);
       } catch (e) {
         console.warn(`Error inside Jobs.onAcceptedRequests: ${e.message}`);
       }
