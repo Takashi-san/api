@@ -571,17 +571,16 @@ const sendHandshakeRequest = async (
     });
   });
 
-  const ownSecret = await SEA.secret(user.is.pub, user._.sea);
-  const encryptedRecipientPublicKey = await SEA.encrypt(
-    recipientPublicKey,
-    ownSecret
+  const encryptedForMeRequestID = await SEA.encrypt(
+    /** @type {string} */ (handshakeRequest._.get),
+    mySecret
   );
 
   return new Promise((res, rej) => {
     user
       .get(Key.REQUEST_TO_USER)
-      .get(/** @type {string} */ (handshakeRequest._.get))
-      .put(encryptedRecipientPublicKey, ack => {
+      .get(encryptedForMeRequestID)
+      .put(encryptedForMeRecipientPublicKey, ack => {
         if (ack.err) {
           rej(
             new Error(

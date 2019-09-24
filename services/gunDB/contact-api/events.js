@@ -110,7 +110,7 @@ const __onOutgoingMessage = async (outgoingKey, cb, gun, user, SEA) => {
  * @param {ISEA} SEA
  * @returns {void}
  */
-const __onSentRequestToUser = (cb, user, SEA) => {
+const __onSentRequestToUser = async (cb, user, SEA) => {
   /** @type {Record<string, string>} */
   const requestToUser = {};
 
@@ -118,29 +118,26 @@ const __onSentRequestToUser = (cb, user, SEA) => {
     throw new Error(ErrorCode.NOT_AUTH);
   }
 
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+
   user
     .get(Key.REQUEST_TO_USER)
     .map()
-    .on(async (userPK, requestKey) => {
-      if (typeof userPK !== "string") {
+    .on(async (encryptedUserPub, encryptedRequestID) => {
+      if (typeof encryptedUserPub !== "string") {
         console.error("got a non string value");
         return;
       }
 
-      if (userPK.length === 0) {
+      if (encryptedUserPub.length === 0) {
         console.error("got an empty string value");
         return;
       }
 
-      if (!user.is) {
-        console.warn("!user.is");
-        return;
-      }
+      const userPub = await SEA.decrypt(encryptedUserPub, mySecret);
+      const requestID = await SEA.decrypt(encryptedRequestID, mySecret);
 
-      const secret = await SEA.secret(user.is.pub, user._.sea);
-      const decryptedUserPK = await SEA.decrypt(userPK, secret);
-
-      requestToUser[requestKey] = decryptedUserPK;
+      requestToUser[requestID] = userPub;
 
       cb(requestToUser);
     });
