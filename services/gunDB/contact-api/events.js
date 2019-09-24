@@ -410,7 +410,7 @@ const onIncomingMessages = (cb, userPK, incomingFeedID, gun, user, SEA) => {
  * @param {ISEA} SEA
  * @param {typeof __onOutgoingMessage} onOutgoingMessage
  */
-const onOutgoing = (
+const onOutgoing = async (
   cb,
   gun,
   user,
@@ -420,6 +420,8 @@ const onOutgoing = (
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
+
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
 
   /**
    * @type {Record<string, Outgoing>}
@@ -435,16 +437,21 @@ const onOutgoing = (
 
   u.get(Key.OUTGOINGS)
     .map()
-    .on((data, key) => {
+    .on(async (data, key) => {
       if (!Schema.isPartialOutgoing(data)) {
         console.warn("not partial outgoing");
         console.warn(JSON.stringify(data));
         return;
       }
 
+      const decryptedRecipientPublicKey = await SEA.decrypt(
+        data.with,
+        mySecret
+      );
+
       outgoings[key] = {
         messages: outgoings[key] ? outgoings[key].messages : {},
-        with: data.with
+        with: decryptedRecipientPublicKey
       };
 
       if (!outgoingsWithMessageListeners.includes(key)) {
