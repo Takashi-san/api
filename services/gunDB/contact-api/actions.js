@@ -253,8 +253,6 @@ const acceptRequest = async (
     SEA
   );
 
-  await outgoingFeedCreator(handshakeRequest.from, user, SEA);
-
   const mySecret = await SEA.secret(user._.sea.pub, user._.sea);
 
   const encryptedForMeIncomingID = await SEA.encrypt(
@@ -280,11 +278,13 @@ const acceptRequest = async (
       });
   });
 
+  const encryptedForMeOutgoingID = await SEA.encrypt(outgoingFeedID, mySecret);
+
   await new Promise((res, rej) => {
     user
       .get(Key.RECIPIENT_TO_OUTGOING)
-      .get(handshakeRequest.from)
-      .put(outgoingFeedID, ack => {
+      .get(encryptedForMeRequestorPK)
+      .put(encryptedForMeOutgoingID, ack => {
         if (ack.err) {
           rej(new Error(ack.err));
         } else {
@@ -487,11 +487,18 @@ const sendHandshakeRequest = async (
     SEA
   );
 
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+  const encryptedForMeRecipientPublicKey = await SEA.encrypt(
+    recipientPublicKey,
+    mySecret
+  );
+  const encryptedForMeOutgoingID = await SEA.encrypt(outgoingFeedID, mySecret);
+
   await new Promise((res, rej) => {
     user
       .get(Key.RECIPIENT_TO_OUTGOING)
-      .get(recipientPublicKey)
-      .put(outgoingFeedID, ack => {
+      .get(encryptedForMeRecipientPublicKey)
+      .put(encryptedForMeOutgoingID, ack => {
         if (ack.err) {
           rej(
             new Error(
@@ -625,18 +632,24 @@ const sendMessage = async (recipientPublicKey, body, gun, user, SEA) => {
     );
   }
 
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+  const encryptedForMeRecipientPublicKey = await SEA.encrypt(
+    recipientPublicKey,
+    mySecret
+  );
+
   /** @type {string} */
-  const outgoingID = await new Promise((res, rej) => {
+  const encryptedForMeOutgoingID = await new Promise((res, rej) => {
     user
       .get(Key.RECIPIENT_TO_OUTGOING)
-      .get(recipientPublicKey)
-      .once(outgoingID => {
-        if (typeof outgoingID === "string") {
-          res(outgoingID);
+      .get(encryptedForMeRecipientPublicKey)
+      .once(efmoid => {
+        if (typeof efmoid === "string") {
+          res(efmoid);
         } else {
           rej(
             new Error(
-              `Expected outgoingID to be an string, instead got: ${typeof outgoingID}`
+              `Expected outgoingID to be an string, instead got: ${typeof efmoid}`
             )
           );
         }
@@ -671,6 +684,8 @@ const sendMessage = async (recipientPublicKey, body, gun, user, SEA) => {
     body: encryptedBody,
     timestamp: Date.now()
   };
+
+  const outgoingID = await SEA.decrypt(encryptedForMeOutgoingID, mySecret);
 
   return new Promise((res, rej) => {
     user
