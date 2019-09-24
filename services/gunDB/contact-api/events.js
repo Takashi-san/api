@@ -394,9 +394,8 @@ const onIncomingMessages = (cb, userPK, incomingFeedID, gun, user, SEA) => {
       const decryptedBody = await SEA.decrypt(encryptedBody, secret);
 
       messages[key] = {
-        // @ts-ignore TODO: See what's going on with typescript here
-        ...msg,
-        body: decryptedBody
+        body: decryptedBody,
+        timestamp: msg.timestamp
       };
 
       cb(messages);
