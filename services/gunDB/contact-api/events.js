@@ -147,9 +147,9 @@ const __onSentRequestToUser = async (cb, user, SEA) => {
  * @param {(userToOutgoing: Record<string, string>) => void} cb
  * @param {UserGUNNode} user Pass only for testing purposes.
  * @param {ISEA} SEA
- * @returns {void}
+ * @returns {Promise<void>}
  */
-const __onUserToIncoming = (cb, user, SEA) => {
+const __onUserToIncoming = async (cb, user, SEA) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -157,15 +157,12 @@ const __onUserToIncoming = (cb, user, SEA) => {
   /** @type {Record<string, string>} */
   const userToOutgoing = {};
 
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+
   user
     .get(Key.USER_TO_INCOMING)
     .map()
-    .on(async (encryptedIncomingID, userPK) => {
-      if (!user.is) {
-        console.warn("!user.is");
-        return;
-      }
-
+    .on(async (encryptedIncomingID, encryptedUserPub) => {
       if (typeof encryptedIncomingID !== "string") {
         console.error("got a non string value");
         return;
@@ -176,10 +173,10 @@ const __onUserToIncoming = (cb, user, SEA) => {
         return;
       }
 
-      const secret = await SEA.secret(user.is.pub, user._.sea);
-      const incomingID = await SEA.decrypt(encryptedIncomingID, secret);
+      const incomingID = await SEA.decrypt(encryptedIncomingID, mySecret);
+      const userPub = await SEA.decrypt(encryptedUserPub, mySecret);
 
-      userToOutgoing[userPK] = incomingID;
+      userToOutgoing[userPub] = incomingID;
 
       cb(userToOutgoing);
     });
