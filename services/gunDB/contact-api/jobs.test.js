@@ -6,11 +6,17 @@ const Jobs = require("./jobs");
 const Key = require("./key");
 const Testing = require("./testing");
 const { createMockGun } = require("./__mocks__/mock-gun");
+// @ts-ignore
+require("gun/sea");
+
+/** @type {import('./SimpleGUN').ISEA} */
+// @ts-ignore
+const Sea = SEA;
 
 describe("__onAcceptedRequests()", () => {
   it("throws a NOT_AUTH error if supplied with a non authenticated node", () => {
     expect(() => {
-      Jobs.onAcceptedRequests(() => {}, createMockGun());
+      Jobs.onAcceptedRequests(() => {}, createMockGun(), createMockGun(), Sea);
     }).toThrow();
   });
 
@@ -73,7 +79,7 @@ describe("__onAcceptedRequests()", () => {
         });
     });
 
-    Jobs.onAcceptedRequests(Events.onSentRequests, user);
+    Jobs.onAcceptedRequests(Events.onSentRequests, gun, user, Sea);
 
     await new Promise((res, rej) => {
       user
