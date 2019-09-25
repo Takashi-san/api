@@ -9,6 +9,8 @@ import Jobs from "./jobs";
 import Key from "./key";
 import Testing from "./testing";
 import { createMockGun } from "./__mocks__/mock-gun";
+// @ts-ignore
+require("gun/sea");
 
 /**
  * @typedef {import('./SimpleGUN').GUNNode} GUNNode
@@ -17,7 +19,12 @@ import { createMockGun } from "./__mocks__/mock-gun";
  * @typedef {import('./schema').Outgoing} Outgoing
  * @typedef {import('./schema').Message} Message
  * @typedef {import('./SimpleGUN').UserGUNNode} UserGUNNode
+ * @typedef {import('./SimpleGUN').ISEA} ISEA
  */
+
+/** @type {ISEA} */
+// @ts-ignore
+const Sea = SEA;
 
 describe("__encryptAndPutResponseToRequest", () => {
   const NOT_AN_STRING = Math.random();
@@ -32,7 +39,9 @@ describe("__encryptAndPutResponseToRequest", () => {
       Math.random().toString(),
       Math.random().toString(),
       Math.random().toString(),
-      createMockGun()
+      createMockGun(),
+      createMockGun(),
+      Sea
     ).catch(e => {
       expect(e.message).toBe(ErrorCode.NOT_AUTH);
       done();
@@ -47,7 +56,9 @@ describe("__encryptAndPutResponseToRequest", () => {
       NOT_AN_STRING,
       Math.random().toString(),
       Math.random().toString(),
-      mockGun
+      createMockGun(),
+      createMockGun(),
+      Sea
     ).catch((/** @type {any} */ e) => {
       done();
       expect(e).toBeInstanceOf(TypeError);
@@ -62,7 +73,9 @@ describe("__encryptAndPutResponseToRequest", () => {
       // @ts-ignore
       NOT_AN_STRING,
       Math.random().toString(),
-      mockGun
+      mockGun,
+      mockGun,
+      Sea
     ).catch((/** @type {any} */ e) => {
       done();
       expect(e).toBeInstanceOf(TypeError);
@@ -77,7 +90,9 @@ describe("__encryptAndPutResponseToRequest", () => {
       Math.random().toString(),
       // @ts-ignore
       NOT_AN_STRING,
-      mockGun
+      mockGun,
+      mockGun,
+      Sea
     ).catch((/** @type {any} */ e) => {
       done();
       expect(e).toBeInstanceOf(TypeError);
@@ -91,7 +106,9 @@ describe("__encryptAndPutResponseToRequest", () => {
       "",
       Math.random().toString(),
       Math.random().toString(),
-      mockGun
+      mockGun,
+      mockGun,
+      Sea
     ).catch(e => {
       done();
       expect(e).toBeInstanceOf(TypeError);
@@ -105,7 +122,9 @@ describe("__encryptAndPutResponseToRequest", () => {
       Math.random().toString(),
       "",
       Math.random().toString(),
-      mockGun
+      mockGun,
+      mockGun,
+      Sea
     ).catch(e => {
       expect(e).toBeInstanceOf(TypeError);
       done();
@@ -119,7 +138,9 @@ describe("__encryptAndPutResponseToRequest", () => {
       Math.random().toString(),
       Math.random().toString(),
       "",
-      mockGun
+      mockGun,
+      mockGun,
+      Sea
     ).catch(e => {
       done();
       expect(e).toBeInstanceOf(TypeError);
@@ -129,7 +150,8 @@ describe("__encryptAndPutResponseToRequest", () => {
   it("changes and encrypts the response of an existing request", done => {
     expect.assertions(1);
 
-    const gun = createMockGun({
+    const gun = createMockGun();
+    const user = createMockGun({
       isAuth: true
     });
 
@@ -148,7 +170,7 @@ describe("__encryptAndPutResponseToRequest", () => {
     const requestorPK = Math.random().toString();
     const newResponse = Math.random().toString();
 
-    theRequestNode = gun
+    theRequestNode = user
       .get(Key.CURRENT_HANDSHAKE_NODE)
       .set(theRequest, ack => {
         if (!ack.err) {
@@ -158,7 +180,9 @@ describe("__encryptAndPutResponseToRequest", () => {
             requestID,
             requestorPK,
             newResponse,
-            gun
+            gun,
+            user,
+            Sea
           ).then(() => {
             theRequestNode.once(data => {
               // @ts-ignore
@@ -185,7 +209,8 @@ describe("__createOutgoingFeed()", () => {
 
     Actions.__createOutgoingFeed(
       Math.random().toString(),
-      createMockGun()
+      createMockGun(),
+      Sea
     ).catch((/** @type {any} */ e) => {
       expect(e.message).toBe(ErrorCode.NOT_AUTH);
       done();
@@ -201,7 +226,7 @@ describe("__createOutgoingFeed()", () => {
 
     const pk = Math.random().toString();
 
-    Actions.__createOutgoingFeed(pk, mockGun).then(outgoingID => {
+    Actions.__createOutgoingFeed(pk, mockGun, Sea).then(outgoingID => {
       mockGun
         .get(Key.OUTGOINGS)
         .get(outgoingID)
@@ -223,7 +248,7 @@ describe("__createOutgoingFeed()", () => {
 
     const pk = Math.random().toString();
 
-    Actions.__createOutgoingFeed(pk, mockGun).then(outgoingID => {
+    Actions.__createOutgoingFeed(pk, mockGun, Sea).then(outgoingID => {
       mockGun
         .get(Key.OUTGOINGS)
         .get(outgoingID)
@@ -246,7 +271,7 @@ describe("__createOutgoingFeed()", () => {
       isAuth: true
     });
 
-    Actions.__createOutgoingFeed(Math.random().toString(), mockGun)
+    Actions.__createOutgoingFeed(Math.random().toString(), mockGun, Sea)
       .then(id => {
         expect(typeof id).toBe("string");
         expect(id.length).toBeGreaterThan(0);
@@ -262,12 +287,15 @@ describe("acceptRequest()", () => {
   it("throws a NOT_AUTH error if supplied with a non authenticated node", done => {
     expect.assertions(1);
 
-    Actions.acceptRequest(Math.random().toString(), createMockGun()).catch(
-      e => {
-        expect(e.message).toEqual(ErrorCode.NOT_AUTH);
-        done();
-      }
-    );
+    Actions.acceptRequest(
+      Math.random().toString(),
+      createMockGun(),
+      createMockGun(),
+      Sea
+    ).catch(e => {
+      expect(e.message).toEqual(ErrorCode.NOT_AUTH);
+      done();
+    });
   });
 
   it("throws if the provided request id does not correspond to an existing request", done => {
@@ -277,7 +305,11 @@ describe("acceptRequest()", () => {
       isAuth: true
     });
 
-    Actions.acceptRequest("TOTALLY_NOT_A_KEY", gun).catch(e => {
+    const user = createMockGun({
+      isAuth: true
+    });
+
+    Actions.acceptRequest("TOTALLY_NOT_A_KEY", gun, user, Sea).catch(e => {
       expect(e.message).toBe(ErrorCode.TRIED_TO_ACCEPT_AN_INVALID_REQUEST);
       done();
     });
@@ -286,9 +318,9 @@ describe("acceptRequest()", () => {
   it("creates an outgoing feed intended for the requestor, the outgoing feed's id can be obtained from the response field of the request", done => {
     expect.assertions(1);
 
-    const user = createMockGun({
-      isAuth: true
-    });
+    const gun = createMockGun();
+
+    const user = createMockGun({ isAuth: true });
 
     const currentHandshakeNode = user.get(Key.CURRENT_HANDSHAKE_NODE);
 
@@ -312,7 +344,7 @@ describe("acceptRequest()", () => {
 
       const requestID = requestNode._.get;
 
-      Actions.acceptRequest(requestID, user).then(() => {
+      Actions.acceptRequest(requestID, gun, user, Sea).then(() => {
         requestNode.once(requestData => {
           // @ts-ignore
           const receivedReq = /** @type {HandshakeRequest} */ (requestData);
@@ -334,6 +366,8 @@ describe("acceptRequest()", () => {
 
   it("creates a recipient-to-outgoing record", async done => {
     expect.assertions(1);
+
+    const gun = createMockGun();
 
     const user = createMockGun({
       isAuth: true
@@ -363,7 +397,7 @@ describe("acceptRequest()", () => {
 
     const requestID = /** @type {string} */ (requestNode._.get);
 
-    await Actions.acceptRequest(requestID, user);
+    await Actions.acceptRequest(requestID, gun, user, Sea);
 
     /** @type {string} */
     const outgoingID = await new Promise(res => {
@@ -483,7 +517,15 @@ describe("authenticate()", () => {
         ...user,
         auth(_, __, cb) {
           // don't do nothing here
-          cb({ err: undefined });
+          cb({
+            err: undefined,
+            sea: {
+              pub: Math.random()
+                .toString()
+                .toString()
+                .toString()
+            }
+          });
         }
       }
     ).catch(e => {
@@ -691,7 +733,8 @@ describe("sendMessage()", () => {
         handshakeAddress,
         recipientEpub,
         gun,
-        user
+        user,
+        Sea
       );
 
       /** @type {string} */
@@ -709,7 +752,7 @@ describe("sendMessage()", () => {
           });
       });
 
-      await Actions.sendMessage(recipientEpub, msgBody, user);
+      await Actions.sendMessage(recipientEpub, msgBody, gun, user, Sea);
 
       user
         .get(Key.OUTGOINGS)
@@ -775,7 +818,7 @@ describe("sendMessage()", () => {
         });
       });
 
-      Jobs.onAcceptedRequests(Events.onSentRequests, requestorUser);
+      Jobs.onAcceptedRequests(Events.onSentRequests, gun, requestorUser, Sea);
 
       await Actions.generateNewHandshakeNode(gun, recipientUser);
 
@@ -793,7 +836,8 @@ describe("sendMessage()", () => {
         handshakeAddr,
         recipientPK,
         gun,
-        requestorUser
+        requestorUser,
+        Sea
       );
 
       /** @type {string} */
@@ -813,9 +857,9 @@ describe("sendMessage()", () => {
         }, requestorUser);
       });
 
-      await Actions.acceptRequest(reqID, recipientUser);
+      await Actions.acceptRequest(reqID, gun, recipientUser, Sea);
 
-      await Actions.sendMessage(requestorPK, msgBody, recipientUser);
+      await Actions.sendMessage(requestorPK, msgBody, gun, recipientUser, Sea);
 
       const outgoingID = await new Promise(res => {
         recipientUser
@@ -863,7 +907,8 @@ describe("sendHandshakeRequest()", () => {
       Math.random().toString(),
       Math.random().toString(),
       createMockGun(),
-      createMockGun()
+      createMockGun(),
+      Sea
     ).catch(e => {
       expect(e.message).toMatch(ErrorCode.NOT_AUTH);
       done();
@@ -881,7 +926,7 @@ describe("sendHandshakeRequest()", () => {
     const handshakeNodeID = /** @type {string} */ (handshakeNode._.get);
     const recipientEpub = Math.random().toString();
 
-    Actions.sendHandshakeRequest(handshakeNodeID, recipientEpub, gun, user)
+    Actions.sendHandshakeRequest(handshakeNodeID, recipientEpub, gun, user, Sea)
       .then(() => {
         gun
           .get(Key.HANDSHAKE_NODES)
@@ -913,7 +958,7 @@ describe("sendHandshakeRequest()", () => {
     const handshakeNodeID = /** @type {string} */ (handshakeNode._.get);
     const recipientEpub = Math.random().toString();
 
-    Actions.sendHandshakeRequest(handshakeNodeID, recipientEpub, gun, user)
+    Actions.sendHandshakeRequest(handshakeNodeID, recipientEpub, gun, user, Sea)
       .then(() => {
         user
           .get(Key.OUTGOINGS)
@@ -942,7 +987,7 @@ describe("sendHandshakeRequest()", () => {
     const handshakeNodeID = /** @type {string} */ (handshakeNode._.get);
     const recipientEpub = Math.random().toString();
 
-    Actions.sendHandshakeRequest(handshakeNodeID, recipientEpub, gun, user)
+    Actions.sendHandshakeRequest(handshakeNodeID, recipientEpub, gun, user, Sea)
       .then(() => {
         user
           .get(Key.RECIPIENT_TO_OUTGOING)

@@ -8,6 +8,8 @@ const Key = require("./key");
 const Jobs = require("./jobs");
 const { createMockGun } = require("./__mocks__/mock-gun");
 const { injectSeaMockToGun, __MOCK_USER_SUPER_NODE } = require("./testing");
+// @ts-ignore
+require("gun/sea");
 /**
  * @typedef {import('./SimpleGUN').GUNNode} GUNNode
  * @typedef {import('./schema').HandshakeRequest} HandshakeRequest
@@ -17,6 +19,10 @@ const { injectSeaMockToGun, __MOCK_USER_SUPER_NODE } = require("./testing");
  * @typedef {import('./schema').Chat} Chat
  * @typedef {import('./schema').ChatMessage} ChatMessage
  */
+
+/** @type {import('./SimpleGUN').ISEA} */
+// @ts-ignore
+const Sea = SEA;
 
 describe("onAvatar()", () => {
   it("throws a NOT_AUTH error if supplied with a non authenticated node", done => {
@@ -348,9 +354,10 @@ describe("onIncomingMessages()", () => {});
 describe("onOutgoing()", () => {
   it("throws a NOT_AUTH error if supplied with a non authenticated node", done => {
     const fakeGun = createMockGun();
+    const user = createMockGun();
 
     try {
-      Events.onOutgoing(() => {}, fakeGun);
+      Events.onOutgoing(() => {}, fakeGun, user, Sea);
     } catch (e) {
       expect(e.message).toBe(ErrorCode.NOT_AUTH);
       done();
@@ -360,33 +367,32 @@ describe("onOutgoing()", () => {
   // TODO: Find out if this test being sync can make it break further down the
   // lane if you tested it with an actual gun node (async)
   it("does NOT supply an empty object if there are no outgoings", () => {
-    const fakeGun = createMockGun({
+    const gun = createMockGun();
+    const user = createMockGun({
       initialData: [],
       isAuth: true
     });
 
     const spy = jest.fn();
 
-    Events.onOutgoing(spy, fakeGun);
+    Events.onOutgoing(spy, gun, user, Sea);
 
     expect(spy).toHaveBeenCalledTimes(0);
   });
 
   it("calls the listener when there's valid data", done => {
-    const fakeOnOutgoingMessage = () => {};
-
-    const fakeKey = Math.random().toString();
-
     const someOutgoings = [
       { with: Math.random().toString() },
       { with: Math.random().toString() }
     ];
 
-    const fakeGun = createMockGun({
+    const gun = createMockGun();
+
+    const user = createMockGun({
       isAuth: true
     });
 
-    const outgoingsNode = fakeGun.get(Key.OUTGOINGS);
+    const outgoingsNode = user.get(Key.OUTGOINGS);
 
     someOutgoings.forEach(io => {
       outgoingsNode.set(io);
@@ -396,7 +402,7 @@ describe("onOutgoing()", () => {
       done();
     });
 
-    Events.onOutgoing(spy, fakeGun, fakeOnOutgoingMessage);
+    Events.onOutgoing(spy, gun, user, Sea);
 
     const [call] = spy.mock.calls;
     // @ts-ignore
@@ -411,7 +417,9 @@ describe("onOutgoing()", () => {
   });
 
   it("supplies the listener with messages for an outgoing", () => {
-    const gun = createMockGun({
+    const gun = createMockGun({});
+
+    const user = createMockGun({
       isAuth: true
     });
 
@@ -432,16 +440,21 @@ describe("onOutgoing()", () => {
 
     sampleOutgoingNode.get(Key.MESSAGES).set(sampleMsg);
 
-    Events.onOutgoing(outgoingsReceived => {
-      const [outgoingReceived] = Object.values(outgoingsReceived);
+    Events.onOutgoing(
+      outgoingsReceived => {
+        const [outgoingReceived] = Object.values(outgoingsReceived);
 
-      const [msgReceived] = Object.values(outgoingReceived.messages);
+        const [msgReceived] = Object.values(outgoingReceived.messages);
 
-      expect({
-        ...msgReceived,
-        _: undefined
-      }).toEqual(sampleMsg);
-    }, gun);
+        expect({
+          ...msgReceived,
+          _: undefined
+        }).toEqual(sampleMsg);
+      },
+      gun,
+      user,
+      Sea
+    );
   });
 });
 
@@ -546,7 +559,8 @@ const setUpChats = async () => {
         } else {
           reqOutID = await Actions.__createOutgoingFeed(
             recipientPK,
-            requestorUser
+            requestorUser,
+            Sea
           );
           res();
         }
@@ -568,7 +582,8 @@ const setUpChats = async () => {
         } else {
           recOutID = await Actions.__createOutgoingFeed(
             requestorPK,
-            recipientUser
+            recipientUser,
+            Sea
           );
           res();
         }
@@ -645,7 +660,7 @@ describe("onChats()", () => {
         return;
       }
 
-      Actions.__createOutgoingFeed(recipientPK, ownUser)
+      Actions.__createOutgoingFeed(recipientPK, ownUser, Sea)
         .then(() => {
           let calls = 0;
 
@@ -659,7 +674,8 @@ describe("onChats()", () => {
               calls++;
             },
             gun,
-            ownUser
+            ownUser,
+            Sea
           );
         })
         .catch(e => {
@@ -686,7 +702,8 @@ describe("onChats()", () => {
         }
       },
       gun,
-      reqUser
+      reqUser,
+      Sea
     );
   });
 
@@ -724,7 +741,8 @@ describe("onChats()", () => {
         }
       },
       gun,
-      reqUser
+      reqUser,
+      Sea
     );
   });
 
@@ -762,7 +780,8 @@ describe("onChats()", () => {
         }
       },
       gun,
-      reqUser
+      reqUser,
+      Sea
     );
   });
 });
@@ -802,7 +821,7 @@ describe("onSimplerSentRequests()", () => {
       pub: recipientPK
     };
 
-    Jobs.onAcceptedRequests(Events.onSentRequests, requestorUser);
+    Jobs.onAcceptedRequests(Events.onSentRequests, gun, requestorUser, Sea);
 
     await Actions.generateNewHandshakeNode(gun, recipientUser);
 
@@ -821,7 +840,8 @@ describe("onSimplerSentRequests()", () => {
       recipientHandshakeAddress,
       recipientPK,
       gun,
-      requestorUser
+      requestorUser,
+      Sea
     );
 
     let calls = 0;
@@ -840,7 +860,8 @@ describe("onSimplerSentRequests()", () => {
         }
       },
       gun,
-      requestorUser
+      requestorUser,
+      Sea
     );
 
     //
@@ -904,13 +925,19 @@ describe("onSimplerSentRequests()", () => {
       pub: requestorPK
     };
 
-    Jobs.onAcceptedRequests(Events.onSentRequests, pseudoRequestorNode);
+    Jobs.onAcceptedRequests(
+      Events.onSentRequests,
+      gun,
+      pseudoRequestorNode,
+      Sea
+    );
 
     await Actions.sendHandshakeRequest(
       recipientHandshakeAddress,
       recipientPK,
       gun,
-      requestorUser
+      requestorUser,
+      Sea
     );
 
     const recipientUserAgain = gun.user();
@@ -937,7 +964,7 @@ describe("onSimplerSentRequests()", () => {
         });
     });
 
-    await Actions.acceptRequest(requestID, recipientUserAgain);
+    await Actions.acceptRequest(requestID, gun, recipientUserAgain, Sea);
 
     const requestorUserAgain = gun.user();
 
@@ -966,7 +993,8 @@ describe("onSimplerSentRequests()", () => {
         done();
       },
       gun,
-      requestorUserAgain
+      requestorUserAgain,
+      Sea
     );
 
     //
@@ -1006,7 +1034,7 @@ describe("onSimplerSentRequests()", () => {
       pub: recipientPK
     };
 
-    Jobs.onAcceptedRequests(Events.onSentRequests, requestorUser);
+    Jobs.onAcceptedRequests(Events.onSentRequests, gun, requestorUser, Sea);
 
     await Actions.generateNewHandshakeNode(gun, recipientUser);
 
@@ -1025,7 +1053,8 @@ describe("onSimplerSentRequests()", () => {
       recipientHandshakeAddress,
       recipientPK,
       gun,
-      requestorUser
+      requestorUser,
+      Sea
     );
 
     await Actions.generateNewHandshakeNode(gun, recipientUser);
@@ -1050,7 +1079,8 @@ describe("onSimplerSentRequests()", () => {
       secondRecipientHandshakeAddress,
       recipientPK,
       gun,
-      requestorUser
+      requestorUser,
+      Sea
     );
 
     let calls = 0;
@@ -1070,7 +1100,8 @@ describe("onSimplerSentRequests()", () => {
         }
       },
       gun,
-      requestorUser
+      requestorUser,
+      Sea
     );
 
     //
@@ -1110,7 +1141,7 @@ describe("onSimplerSentRequests()", () => {
       pub: recipientPK
     };
 
-    Jobs.onAcceptedRequests(Events.onSentRequests, requestorUser);
+    Jobs.onAcceptedRequests(Events.onSentRequests, gun, requestorUser, Sea);
 
     await Actions.generateNewHandshakeNode(gun, recipientUser);
 
@@ -1129,7 +1160,8 @@ describe("onSimplerSentRequests()", () => {
       recipientHandshakeAddress,
       recipientPK,
       gun,
-      requestorUser
+      requestorUser,
+      Sea
     );
 
     await Actions.generateNewHandshakeNode(gun, recipientUser);
@@ -1152,7 +1184,8 @@ describe("onSimplerSentRequests()", () => {
         }
       },
       gun,
-      requestorUser
+      requestorUser,
+      Sea
     );
 
     //
@@ -1205,7 +1238,7 @@ describe("onSimplerSentRequests()", () => {
         });
     });
 
-    Jobs.onAcceptedRequests(Events.onSentRequests, requestorUser);
+    Jobs.onAcceptedRequests(Events.onSentRequests, gun, requestorUser, Sea);
 
     await Actions.generateNewHandshakeNode(gun, recipientUser);
 
@@ -1224,7 +1257,8 @@ describe("onSimplerSentRequests()", () => {
       recipientHandshakeAddress,
       recipientPK,
       gun,
-      requestorUser
+      requestorUser,
+      Sea
     );
 
     let calls = 0;
@@ -1245,7 +1279,8 @@ describe("onSimplerSentRequests()", () => {
         }
       },
       gun,
-      requestorUser
+      requestorUser,
+      Sea
     );
 
     //
@@ -1298,7 +1333,7 @@ describe("onSimplerSentRequests()", () => {
         });
     });
 
-    Jobs.onAcceptedRequests(Events.onSentRequests, requestorUser);
+    Jobs.onAcceptedRequests(Events.onSentRequests, gun, requestorUser, Sea);
 
     await Actions.generateNewHandshakeNode(gun, recipientUser);
 
@@ -1317,7 +1352,8 @@ describe("onSimplerSentRequests()", () => {
       recipientHandshakeAddress,
       recipientPK,
       gun,
-      requestorUser
+      requestorUser,
+      Sea
     );
 
     let calls = 0;
@@ -1338,7 +1374,8 @@ describe("onSimplerSentRequests()", () => {
         }
       },
       gun,
-      requestorUser
+      requestorUser,
+      Sea
     );
 
     //
@@ -1350,7 +1387,7 @@ describe("onSimplerReceivedRequests()", () => {
     const gun = createMockGun();
 
     expect(() => {
-      Events.onSimplerReceivedRequests(() => {}, gun, gun.user());
+      Events.onSimplerReceivedRequests(() => {}, gun, gun.user(), Sea);
     }).toThrow();
   });
 
@@ -1418,7 +1455,8 @@ describe("onSimplerReceivedRequests()", () => {
         calls++;
       },
       gun,
-      user
+      user,
+      Sea
     );
 
     //
@@ -1508,7 +1546,8 @@ describe("onSimplerReceivedRequests()", () => {
         calls++;
       },
       gun,
-      recipientUser
+      recipientUser,
+      Sea
     );
 
     //
@@ -1563,7 +1602,8 @@ describe("onSimplerReceivedRequests()", () => {
       handshakeAddress,
       recipientPK,
       gun,
-      requestorUser
+      requestorUser,
+      Sea
     );
     const reqID = await new Promise((res, rej) => {
       let calls = 0;
@@ -1581,7 +1621,8 @@ describe("onSimplerReceivedRequests()", () => {
           calls++;
         },
         gun,
-        requestorUser
+        requestorUser,
+        Sea
       );
     });
 
@@ -1598,11 +1639,12 @@ describe("onSimplerReceivedRequests()", () => {
           calls++;
         },
         gun,
-        recipientUser
+        recipientUser,
+        Sea
       );
     });
 
-    await Actions.acceptRequest(reqID, recipientUser);
+    await Actions.acceptRequest(reqID, gun, recipientUser, Sea);
 
     return new Promise(res => {
       let calls = 0;
@@ -1617,7 +1659,8 @@ describe("onSimplerReceivedRequests()", () => {
           calls++;
         },
         gun,
-        recipientUser
+        recipientUser,
+        Sea
       );
     });
 
@@ -1676,7 +1719,8 @@ describe("onSimplerReceivedRequests()", () => {
       handshakeAddress,
       recipientPK,
       gun,
-      requestorUser
+      requestorUser,
+      Sea
     );
 
     return new Promise(res => {
@@ -1695,7 +1739,8 @@ describe("onSimplerReceivedRequests()", () => {
           calls++;
         },
         gun,
-        recipientUser
+        recipientUser,
+        Sea
       );
     });
 
@@ -1754,7 +1799,8 @@ describe("onSimplerReceivedRequests()", () => {
       handshakeAddress,
       recipientPK,
       gun,
-      requestorUser
+      requestorUser,
+      Sea
     );
 
     return new Promise(res => {
@@ -1772,7 +1818,8 @@ describe("onSimplerReceivedRequests()", () => {
           calls++;
         },
         gun,
-        recipientUser
+        recipientUser,
+        Sea
       );
     });
 
