@@ -107,25 +107,47 @@ exports.injectSeaMockToGun = (gun, userPublicKeyProvider = alias => alias) => {
       get _() {
         return {
           get: undefined,
-          sea: storedPublicKey === null ? undefined : storedPublicKey,
+          sea: {
+            epriv:
+              storedPublicKey === null
+                ? Math.random().toString()
+                : storedPublicKey,
+            epub:
+              storedPublicKey === null
+                ? Math.random().toString()
+                : storedPublicKey,
+            priv:
+              storedPublicKey === null
+                ? Math.random().toString()
+                : storedPublicKey,
+            pub:
+              storedPublicKey === null
+                ? Math.random().toString()
+                : storedPublicKey
+          },
           put: undefined
         };
       },
       auth(alias, pass, cb) {
         if (shouldFailAuth) {
-          cb({ err: "failAuth() called" });
+          cb({ err: "failAuth() called", sea: undefined });
         } else {
           // get GUID and store it here
           storedPublicKey = userPublicKeyProvider(alias, pass);
 
-          cb({ err: undefined });
+          cb({
+            err: undefined,
+            sea: {
+              pub: /** @type {string} */ (storedPublicKey)
+            }
+          });
         }
       },
       create(_, __, cb) {
         if (shouldFailCreate) {
-          cb({ err: "failCreate() called" });
+          cb({ err: "failCreate() called", pub: undefined });
         } else {
-          cb({ err: undefined });
+          cb({ err: undefined, pub: Math.random().toString() });
         }
       },
       get(key) {

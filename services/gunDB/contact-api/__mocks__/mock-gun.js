@@ -2,7 +2,9 @@
  * @prettier
  */
 /**
+ * @typedef {import('../SimpleGUN').AuthCB} AuthCB
  * @typedef {import('../SimpleGUN').Callback} Callback
+ * @typedef {import('../SimpleGUN').CreateCB} CreateCB
  * @typedef {import('../SimpleGUN').Data} Data
  * @typedef {import('../SimpleGUN').GUNNode} GUNNode
  * @typedef {import('../SimpleGUN').Listener} Listener
@@ -207,7 +209,19 @@ export default class MockGun {
         typeof this.graph === "object" && this.graph !== null
           ? { "#": this.key }
           : this.graph,
-      sea: this.is ? Math.random().toString() : undefined
+      sea: this.is
+        ? {
+            epriv: this.is.pub,
+            epub: this.is.pub,
+            priv: this.is.pub,
+            pub: this.is.pub
+          }
+        : {
+            epriv: Math.random().toString(),
+            epub: Math.random().toString(),
+            priv: Math.random().toString(),
+            pub: Math.random().toString()
+          }
     };
   }
 
@@ -382,14 +396,17 @@ export default class MockGun {
   /**
    * @param {string} _
    * @param {string} __
-   * @param {Callback=} cb
+   * @param {AuthCB=} cb
    * @returns {void}
    */
   auth(_, __, cb) {
     if (this.failUserAuth) {
       cb &&
         cb({
-          err: "Failed authentication mock."
+          err: "Failed authentication mock.",
+          sea: {
+            pub: Math.random().toString()
+          }
         });
     } else {
       this.is = {
@@ -398,7 +415,8 @@ export default class MockGun {
 
       cb &&
         cb({
-          err: undefined
+          err: undefined,
+          sea: undefined
         });
     }
   }
@@ -406,19 +424,21 @@ export default class MockGun {
   /**
    * @param {string} _
    * @param {string} __
-   * @param {Callback=} cb
+   * @param {CreateCB=} cb
    * @returns {void}
    */
   create(_, __, cb) {
     if (this.failUserCreation) {
       cb &&
         cb({
-          err: "Failed user creation mock."
+          err: "Failed user creation mock.",
+          pub: Math.random().toString()
         });
     } else {
       cb &&
         cb({
-          err: undefined
+          err: undefined,
+          pub: Math.random().toString()
         });
     }
   }
@@ -820,6 +840,8 @@ export default class MockGun {
       return newSubNode;
     } else {
       console.warn("Tried to call set() on a primitive-graph node");
+      // @ts-ignore
+      return null;
     }
   }
 
