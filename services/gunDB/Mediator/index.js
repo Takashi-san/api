@@ -4,6 +4,13 @@ const once = require("lodash/once");
 // @ts-ignore
 require("gun/sea");
 
+// @ts-ignore
+require("gun/sea");
+
+/** @type {import('../contact-api/SimpleGUN').ISEA} */
+// @ts-ignore
+const Sea = SEA;
+
 const auth = require("../../auth/auth");
 
 const Action = require("../action-constants.js");
@@ -110,7 +117,7 @@ class Mediator {
 
       await throwOnInvalidToken(token);
 
-      await API.Actions.acceptRequest(requestID, user);
+      await API.Actions.acceptRequest(requestID, gun, user, Sea);
 
       this.socket.emit(Action.ACCEPT_REQUEST, {
         ok: true,
@@ -131,7 +138,8 @@ class Mediator {
           300
         ),
         gun,
-        user
+        user,
+        Sea
       );
     } catch (e) {
       this.socket.emit(Action.ACCEPT_REQUEST, {
@@ -209,7 +217,8 @@ class Mediator {
         handshakeAddress,
         recipientPublicKey,
         gun,
-        user
+        user,
+        Sea
       );
 
       this.socket.emit(Action.SEMD_HANDSHAKE_REQUEST, {
@@ -235,7 +244,7 @@ class Mediator {
 
       await throwOnInvalidToken(token);
 
-      await API.Actions.sendMessage(recipientPublicKey, body, user);
+      await API.Actions.sendMessage(recipientPublicKey, body, gun, user, Sea);
 
       this.socket.emit(Action.SEND_MESSAGE, {
         ok: true,
@@ -371,7 +380,8 @@ class Mediator {
           });
         },
         gun,
-        user
+        user,
+        Sea
       );
     } catch (e) {
       this.socket.emit(Event.ON_CHATS, {
@@ -450,7 +460,8 @@ class Mediator {
           });
         },
         gun,
-        user
+        user,
+        Sea
       );
     } catch (e) {
       this.socket.emit(Event.ON_RECEIVED_REQUESTS, {
@@ -479,7 +490,8 @@ class Mediator {
           });
         },
         gun,
-        user
+        user,
+        Sea
       );
     } catch (e) {
       this.socket.emit(Event.ON_SENT_REQUESTS, {
