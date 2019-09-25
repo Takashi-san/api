@@ -108,7 +108,7 @@ const __onOutgoingMessage = async (outgoingKey, cb, gun, user, SEA) => {
  * @param {(requestToUser: Record<string, string>) => void} cb
  * @param {UserGUNNode} user Pass only for testing purposes.
  * @param {ISEA} SEA
- * @returns {void}
+ * @returns {Promise<void>}
  */
 const __onSentRequestToUser = async (cb, user, SEA) => {
   /** @type {Record<string, string>} */
@@ -593,78 +593,82 @@ const onChats = (cb, gun, user, SEA) => {
     SEA
   );
 
-  __onUserToIncoming(uti => {
-    for (const [recipientPK, incomingFeedID] of Object.entries(uti)) {
-      if (!recipientPKToChat[recipientPK]) {
-        recipientPKToChat[recipientPK] = {
-          messages: [],
-          recipientAvatar: "",
-          recipientDisplayName: recipientPK,
-          recipientPublicKey: recipientPK
-        };
-      }
+  __onUserToIncoming(
+    uti => {
+      for (const [recipientPK, incomingFeedID] of Object.entries(uti)) {
+        if (!recipientPKToChat[recipientPK]) {
+          recipientPKToChat[recipientPK] = {
+            messages: [],
+            recipientAvatar: "",
+            recipientDisplayName: recipientPK,
+            recipientPublicKey: recipientPK
+          };
+        }
 
-      const chat = recipientPKToChat[recipientPK];
+        const chat = recipientPKToChat[recipientPK];
 
-      if (!usersWithIncomingListeners.includes(recipientPK)) {
-        usersWithIncomingListeners.push(recipientPK);
+        if (!usersWithIncomingListeners.includes(recipientPK)) {
+          usersWithIncomingListeners.push(recipientPK);
 
-        onIncomingMessages(
-          msgs => {
-            for (const [msgK, msg] of Object.entries(msgs)) {
-              const messages = chat.messages;
+          onIncomingMessages(
+            msgs => {
+              for (const [msgK, msg] of Object.entries(msgs)) {
+                const messages = chat.messages;
 
-              if (!messages.find(m => m.id === msgK)) {
-                messages.push({
-                  body: msg.body,
-                  id: msgK,
-                  outgoing: false,
-                  timestamp: msg.timestamp
-                });
+                if (!messages.find(m => m.id === msgK)) {
+                  messages.push({
+                    body: msg.body,
+                    id: msgK,
+                    outgoing: false,
+                    timestamp: msg.timestamp
+                  });
+                }
               }
-            }
 
-            callCB();
-          },
-          recipientPK,
-          incomingFeedID,
-          gun,
-          user,
-          SEA
-        );
-      }
-
-      if (!usersWithAvatarListeners.includes(recipientPK)) {
-        usersWithAvatarListeners.push(recipientPK);
-
-        gun
-          .user(recipientPK)
-          .get(Key.PROFILE)
-          .get(Key.AVATAR)
-          .on(avatar => {
-            if (typeof avatar === "string") {
-              chat.recipientAvatar = avatar;
               callCB();
-            }
-          });
-      }
+            },
+            recipientPK,
+            incomingFeedID,
+            gun,
+            user,
+            SEA
+          );
+        }
 
-      if (!usersWithDisplayNameListeners.includes(recipientPK)) {
-        usersWithDisplayNameListeners.push(recipientPK);
+        if (!usersWithAvatarListeners.includes(recipientPK)) {
+          usersWithAvatarListeners.push(recipientPK);
 
-        gun
-          .user(recipientPK)
-          .get(Key.PROFILE)
-          .get(Key.DISPLAY_NAME)
-          .on(displayName => {
-            if (typeof displayName === "string") {
-              chat.recipientDisplayName = displayName;
-              callCB();
-            }
-          });
+          gun
+            .user(recipientPK)
+            .get(Key.PROFILE)
+            .get(Key.AVATAR)
+            .on(avatar => {
+              if (typeof avatar === "string") {
+                chat.recipientAvatar = avatar;
+                callCB();
+              }
+            });
+        }
+
+        if (!usersWithDisplayNameListeners.includes(recipientPK)) {
+          usersWithDisplayNameListeners.push(recipientPK);
+
+          gun
+            .user(recipientPK)
+            .get(Key.PROFILE)
+            .get(Key.DISPLAY_NAME)
+            .on(displayName => {
+              if (typeof displayName === "string") {
+                chat.recipientDisplayName = displayName;
+                callCB();
+              }
+            });
+        }
       }
-    }
-  }, user);
+    },
+    user,
+    SEA
+  );
 };
 
 /**
@@ -872,99 +876,103 @@ const onSimplerSentRequests = (cb, gun, user, SEA) => {
       callCB();
     });
 
-  __onSentRequestToUser(srtu => {
-    for (const [sentRequestID, recipientPK] of Object.entries(srtu)) {
-      if (!idToPartialSimpleSentRequest[sentRequestID]) {
-        idToPartialSimpleSentRequest[sentRequestID] = {
-          id: sentRequestID,
-          recipientAvatar: "",
-          recipientChangedRequestAddress: false,
-          recipientDisplayName: "",
-          recipientPublicKey: recipientPK
-        };
+  __onSentRequestToUser(
+    srtu => {
+      for (const [sentRequestID, recipientPK] of Object.entries(srtu)) {
+        if (!idToPartialSimpleSentRequest[sentRequestID]) {
+          idToPartialSimpleSentRequest[sentRequestID] = {
+            id: sentRequestID,
+            recipientAvatar: "",
+            recipientChangedRequestAddress: false,
+            recipientDisplayName: "",
+            recipientPublicKey: recipientPK
+          };
+        }
+
+        if (!recipientsWithAvatarListener.includes(recipientPK)) {
+          recipientsWithAvatarListener.push(recipientPK);
+
+          gun
+            .user(recipientPK)
+            .get(Key.PROFILE)
+            .get(Key.AVATAR)
+            .on(avatar => {
+              if (typeof avatar === "string") {
+                idToPartialSimpleSentRequest[
+                  sentRequestID
+                ].recipientAvatar = avatar;
+
+                callCB();
+              }
+            });
+        }
+
+        if (!recipientsWithDisplayNameListener.includes(recipientPK)) {
+          recipientsWithDisplayNameListener.push(recipientPK);
+
+          gun
+            .user(recipientPK)
+            .get(Key.PROFILE)
+            .get(Key.DISPLAY_NAME)
+            .on(displayName => {
+              if (typeof displayName === "string") {
+                idToPartialSimpleSentRequest[
+                  sentRequestID
+                ].recipientDisplayName = displayName;
+
+                callCB();
+              }
+            });
+        }
+
+        if (!recipientsWithCurrentHandshakeNodeListener.includes(recipientPK)) {
+          recipientsWithCurrentHandshakeNodeListener.push(recipientPK);
+
+          gun
+            .user(recipientPK)
+            .get(Key.CURRENT_HANDSHAKE_NODE)
+            .on(() => {
+              gun
+                .user(recipientPK)
+                .get(Key.CURRENT_HANDSHAKE_NODE)
+                .get(sentRequestID)
+                .once(data => {
+                  if (typeof data === "undefined") {
+                    idToPartialSimpleSentRequest[
+                      sentRequestID
+                    ].recipientChangedRequestAddress = true;
+
+                    callCB();
+                  }
+                });
+            });
+        }
+
+        if (
+          typeof idToPartialSimpleSentRequest[sentRequestID].timestamp ===
+          "undefined"
+        ) {
+          user
+            .get(Key.SENT_REQUESTS)
+            .get(sentRequestID)
+            .once(sr => {
+              if (Schema.isHandshakeRequest(sr)) {
+                idToPartialSimpleSentRequest[sentRequestID].timestamp =
+                  sr.timestamp;
+
+                callCB();
+              } else {
+                console.warn("non handshake request received");
+              }
+            });
+        }
       }
 
-      if (!recipientsWithAvatarListener.includes(recipientPK)) {
-        recipientsWithAvatarListener.push(recipientPK);
-
-        gun
-          .user(recipientPK)
-          .get(Key.PROFILE)
-          .get(Key.AVATAR)
-          .on(avatar => {
-            if (typeof avatar === "string") {
-              idToPartialSimpleSentRequest[
-                sentRequestID
-              ].recipientAvatar = avatar;
-
-              callCB();
-            }
-          });
-      }
-
-      if (!recipientsWithDisplayNameListener.includes(recipientPK)) {
-        recipientsWithDisplayNameListener.push(recipientPK);
-
-        gun
-          .user(recipientPK)
-          .get(Key.PROFILE)
-          .get(Key.DISPLAY_NAME)
-          .on(displayName => {
-            if (typeof displayName === "string") {
-              idToPartialSimpleSentRequest[
-                sentRequestID
-              ].recipientDisplayName = displayName;
-
-              callCB();
-            }
-          });
-      }
-
-      if (!recipientsWithCurrentHandshakeNodeListener.includes(recipientPK)) {
-        recipientsWithCurrentHandshakeNodeListener.push(recipientPK);
-
-        gun
-          .user(recipientPK)
-          .get(Key.CURRENT_HANDSHAKE_NODE)
-          .on(() => {
-            gun
-              .user(recipientPK)
-              .get(Key.CURRENT_HANDSHAKE_NODE)
-              .get(sentRequestID)
-              .once(data => {
-                if (typeof data === "undefined") {
-                  idToPartialSimpleSentRequest[
-                    sentRequestID
-                  ].recipientChangedRequestAddress = true;
-
-                  callCB();
-                }
-              });
-          });
-      }
-
-      if (
-        typeof idToPartialSimpleSentRequest[sentRequestID].timestamp ===
-        "undefined"
-      ) {
-        user
-          .get(Key.SENT_REQUESTS)
-          .get(sentRequestID)
-          .once(sr => {
-            if (Schema.isHandshakeRequest(sr)) {
-              idToPartialSimpleSentRequest[sentRequestID].timestamp =
-                sr.timestamp;
-
-              callCB();
-            } else {
-              console.warn("non handshake request received");
-            }
-          });
-      }
-    }
-
-    callCB();
-  }, user);
+      callCB();
+    },
+    user,
+    SEA
+  );
 };
 
 module.exports = {
