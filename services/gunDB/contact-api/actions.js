@@ -518,7 +518,11 @@ const sendHandshakeRequest = async (
       .get("epub")
       .once(epub => {
         if (typeof epub !== "string") {
-          rej(new Error("Expected gun.user(pub).get(epub) to be an string."));
+          rej(
+            new Error(
+              `Expected gun.user(pub).get(epub) to be an string. Instead got: ${typeof epub}`
+            )
+          );
         } else {
           if (epub.length === 0) {
             rej(
