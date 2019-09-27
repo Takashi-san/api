@@ -2,7 +2,7 @@
   "name": "sw-server",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "src/server.js",
   "scripts": {
     "start": "node --experimental-modules src/server.js",
     "dev": "node main.js -h 0.0.0.0",
