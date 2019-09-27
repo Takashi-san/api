@@ -7,7 +7,6 @@ const grpc = require("grpc");
 const bitcore = require("bitcore-lib");
 const Mediator = require("../services/gunDB/Mediator/index.js");
 const fs = require("fs");
-const staticClientFunc = require("../services/staticClient/staticClient");
 const BufferUtil = bitcore.util.buffer;
 
 // TODO
@@ -22,30 +21,11 @@ module.exports = function(
   lndLogfile,
   lnServicesData
 ) {
-  // let socketConnection;
-
   const EventEmitter = require("events");
 
   class MySocketsEvents extends EventEmitter {}
 
   const mySocketsEvents = new MySocketsEvents();
-
-  // mySocketsEvents.on('updateLightning', (socketConnection) => {
-  // 	let lnServices;
-  //
-  // 	if (fs.existsSync(lnServicesData.macaroonPath)) {
-  // 		lnServices = require("../services/lnd/lightning")(lnServicesData.lndProto, lnServicesData.lndHost, lnServicesData.lndCertPath, lnServicesData.macaroonPath);
-  // 	} else {
-  // 		lnServices = require("../services/lnd/lightning")(lnServicesData.lndProto, lnServicesData.lndHost, lnServicesData.lndCertPath);
-  // 	}
-  // 	lightning = lnServices.lightning;
-  //
-  // 	let staticClientResponse = staticClientFunc(lightning, socketConnection, lnServicesData);
-  //
-  // });
-
-  let staticClientEvents;
-  let staticClient;
 
   var clients = [];
 
@@ -157,7 +137,7 @@ module.exports = function(
   io.on("connection", async function(socket) {
     // socketConnection = socket;
     // this is where we create the websocket connection
-    // with the static service.
+    // with the GunDB service.
 
     new Mediator(socket);
 
@@ -177,11 +157,9 @@ module.exports = function(
       );
     }
     lightning = lnServices.lightning;
-    staticClientEvents = staticClientFunc(lightning, socket, lnServicesData);
 
     mySocketsEvents.addListener("updateLightning", async () => {
       console.log("mySocketsEvents.on(updateLightning");
-      staticClientEvents.emit("updateLightning");
 
       let lnServices;
       if (fs.existsSync(lnServicesData.macaroonPath)) {
@@ -199,26 +177,7 @@ module.exports = function(
         );
       }
       lightning = lnServices.lightning;
-
-      // let staticClientResponse = staticClientFunc(lightning, socket, lnServicesData);
     });
-
-    // let staticSocket = staticClientResponse.socket;
-    // staticClientEvents = staticClientResponse.staticClientEvents;
-
-    // return {mySocketsEvents: mySocketsEvents, staticClientEvents: staticClientEvents};
-
-    // lightning.getInfo({}, function (err, response) {
-    // 	if (err) {
-    // 		console.log("GetInfo Error:", err);
-    // 	} else {
-    // 		console.log("GetInfo:", response);
-    //     identity_pubkey = response.identity_pubkey;
-    //     xxx.emit("register", {
-    //       walletId: response.identity_pubkey
-    //     });
-    // 	}
-    // });
 
     debug("socket.handshake", socket.handshake);
 
