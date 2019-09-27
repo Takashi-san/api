@@ -199,18 +199,7 @@ const server = async program => {
         }
       );
 
-      const swConfig = require("../sw.config.json");
-
       const colors = require("../utils/colors");
-
-      if (!swConfig["lndDirPath"]) {
-        console.log(
-          colors.error(
-            "Error: In order to run the Shockwallet server you'll need to fill out the sw.config.json file in the root directory"
-          )
-        );
-        return;
-      }
 
       app.use(require("./cors")); // enable CORS headers
       // app.use(bodyParser.json({limit: '100000mb'}));
