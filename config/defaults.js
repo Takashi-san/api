@@ -1,28 +1,41 @@
-let os = require('os');
-let platform = os.platform();
-let homeDir = os.homedir();
+const os = require("os");
+const platform = os.platform();
+const homeDir = os.homedir();
 
-let getLndDirectory = () => {
-	if (platform == 'darwin') {
-		return homeDir + "/Library/Application Support/Lnd";
-	} else {
-		return homeDir + "/.lnd"; //Windows not impplemented yet
-	}
+const getLndDirectory = () => {
+  const { APPDATA } = process.env;
+  if (platform === "darwin") {
+    return homeDir + "/Library/Application Support/Lnd";
+  } else if (platform === "win32") {
+    return path.resolve(APPDATA, "../Local/Lnd");
+  } else {
+    return homeDir + "/.lnd";
+  }
 };
 
-let lndDirectory = getLndDirectory();
+const parsePath = path => {
+  if (platform === "win32") {
+    return path.replace("/", "\\");
+  }
+
+  return path;
+};
+
+const lndDirectory = getLndDirectory();
 
 module.exports = {
-	serverPort: 9835,
-	serverHost: "localhost",
-	lndProto: __dirname + "/rpc.proto",
-	lndHost: "localhost:10009",
-	// lndCertPath: __dirname + "/../lnd.cert",
-	// macaroonPath: __dirname + "/../admin.macaroon",
-	lndCertPath: lndDirectory + "/tls.cert",
-	macaroonPath: lndDirectory + "/data/chain/bitcoin/testnet/admin.macaroon",
-	dataPath: __dirname + "/../data",
-	loglevel: "info",
-	logfile: "lncliweb.log",
-	lndLogFile: lndDirectory + "/logs/bitcoin/testnet/lnd.log"
+  serverPort: 9835,
+  serverHost: "localhost",
+  lndProto: parsePath(`${__dirname}/rpc.proto`),
+  lndHost: "localhost:10009",
+  // lndCertPath: __dirname + "/../lnd.cert",
+  // macaroonPath: __dirname + "/../admin.macaroon",
+  lndCertPath: parsePath(`${lndDirectory}/tls.cert`),
+  macaroonPath: parsePath(
+    `${lndDirectory}/data/chain/bitcoin/testnet/admin.macaroon`
+  ),
+  dataPath: parsePath(`${lndDirectory}/data`),
+  loglevel: "info",
+  logfile: "lncliweb.log",
+  lndLogFile: parsePath(`${lndDirectory}/logs/bitcoin/testnet/lnd.log`)
 };
