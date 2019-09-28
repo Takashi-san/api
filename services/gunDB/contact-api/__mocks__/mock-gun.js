@@ -452,6 +452,12 @@ export default class MockGun {
       throw new TypeError();
     }
 
+    if (this.is && key === "epub") {
+      return new MockGun({
+        initialData: this.is.pub
+      });
+    }
+
     if (
       typeof this.graph === "boolean" ||
       typeof this.graph === "number" ||
