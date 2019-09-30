@@ -68,9 +68,6 @@ exports.__MOCK_USER_SUPER_NODE = "$$_MOCK_USER_SUPER_NODE";
  * @returns {void}
  */
 exports.injectSeaMockToGun = (gun, userPublicKeyProvider = alias => alias) => {
-  /** @type {null|string} */
-  let storedPublicKey = null;
-
   /**
    * @param {string=} publicKey
    */
@@ -78,6 +75,13 @@ exports.injectSeaMockToGun = (gun, userPublicKeyProvider = alias => alias) => {
   gun.user = publicKey => {
     if (publicKey) {
       const node = gun.get(exports.__MOCK_USER_SUPER_NODE).get(publicKey);
+
+      // @ts-ignore
+      node.graph = {
+        // @ts-ignore
+        ...node.graph,
+        epub: publicKey
+      };
 
       node.put = () => {
         throw new Error();
@@ -102,28 +106,23 @@ exports.injectSeaMockToGun = (gun, userPublicKeyProvider = alias => alias) => {
       return node;
     }
 
+    /** @type {null|string} */
+    let storedPublicKey = null;
+
     /** @type {UserGUNNode} */
     const surrogate = {
       get _() {
+        if (storedPublicKey === null) {
+          throw new Error("Tried to access _ without authenticating first.");
+        }
+
         return {
           get: undefined,
           sea: {
-            epriv:
-              storedPublicKey === null
-                ? Math.random().toString()
-                : storedPublicKey,
-            epub:
-              storedPublicKey === null
-                ? Math.random().toString()
-                : storedPublicKey,
-            priv:
-              storedPublicKey === null
-                ? Math.random().toString()
-                : storedPublicKey,
-            pub:
-              storedPublicKey === null
-                ? Math.random().toString()
-                : storedPublicKey
+            epriv: storedPublicKey,
+            epub: storedPublicKey,
+            priv: storedPublicKey,
+            pub: storedPublicKey
           },
           put: undefined
         };
@@ -134,6 +133,26 @@ exports.injectSeaMockToGun = (gun, userPublicKeyProvider = alias => alias) => {
         } else {
           // get GUID and store it here
           storedPublicKey = userPublicKeyProvider(alias, pass);
+
+          gun
+            .get(exports.__MOCK_USER_SUPER_NODE)
+            .get(storedPublicKey)
+            .get("epub")
+            .put(storedPublicKey, ack => {
+              if (ack.err) {
+                cb({
+                  err: `Error setting epub: ${ack.err}`,
+                  sea: undefined
+                });
+              } else {
+                cb({
+                  err: undefined,
+                  sea: {
+                    pub: /** @type {string} */ (storedPublicKey)
+                  }
+                });
+              }
+            });
 
           cb({
             err: undefined,
