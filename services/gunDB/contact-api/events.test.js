@@ -5,9 +5,8 @@ const Actions = require("./actions");
 const ErrorCode = require("./errorCode");
 const Events = require("./events");
 const Key = require("./key");
-const Jobs = require("./jobs");
+import * as TestUtils from "./test-utils";
 const { createMockGun } = require("./__mocks__/mock-gun");
-const { injectSeaMockToGun, __MOCK_USER_SUPER_NODE } = require("./testing");
 // @ts-ignore
 require("gun/sea");
 /**
@@ -26,10 +25,10 @@ const Sea = SEA;
 
 describe("onAvatar()", () => {
   it("throws a NOT_AUTH error if supplied with a non authenticated node", done => {
-    const fakeGun = createMockGun();
+    const fakeGun = createMockGun({});
 
     try {
-      Events.onAvatar(() => {}, fakeGun);
+      Events.onAvatar(() => {}, fakeGun.user());
     } catch (e) {
       expect(e.message).toBe(ErrorCode.NOT_AUTH);
       done();
@@ -40,7 +39,7 @@ describe("onAvatar()", () => {
     const initialValue = "jakdljkasd";
     const fakeGun = createMockGun({
       isAuth: true
-    });
+    }).user();
 
     const spy = jest.fn(() => {
       done();
@@ -62,7 +61,7 @@ describe("onAvatar()", () => {
     const initialValue = "jakdljkasd";
     const fakeGun = createMockGun({
       isAuth: true
-    });
+    }).user();
 
     const spy = jest.fn(() => {
       done();
@@ -83,7 +82,7 @@ describe("onAvatar()", () => {
 
 describe("onBlacklist()", () => {
   it("throws a NOT_AUTH error if supplied with a non authenticated node", () => {
-    const mockGun = createMockGun();
+    const mockGun = createMockGun().user();
 
     try {
       Events.onBlacklist(() => {}, mockGun);
@@ -98,7 +97,7 @@ describe("onBlacklist()", () => {
 
     const mockGun = createMockGun({
       isAuth: true
-    });
+    }).user();
 
     const blacklist = mockGun.get(Key.BLACKLIST);
 
@@ -130,7 +129,7 @@ describe("onCurrentHandshakeAddress()", () => {
   it("throws a NOT_AUTH error if supplied with a non authenticated node", done => {
     expect.assertions(1);
 
-    const user = createMockGun({ isAuth: false });
+    const user = createMockGun({ isAuth: false }).user();
 
     try {
       Events.onCurrentHandshakeAddress(() => {}, user);
@@ -144,8 +143,6 @@ describe("onCurrentHandshakeAddress()", () => {
     expect.assertions(1);
 
     const gun = createMockGun();
-
-    injectSeaMockToGun(gun);
 
     const user = gun.user();
 
@@ -169,8 +166,6 @@ describe("onCurrentHandshakeAddress()", () => {
     expect.assertions(1);
 
     const gun = createMockGun();
-
-    injectSeaMockToGun(gun);
 
     const user = gun.user();
 
@@ -204,7 +199,7 @@ describe("onCurrentHandshakeNode()", () => {
     const fakeGun = createMockGun();
 
     try {
-      Events.onCurrentHandshakeNode(() => {}, fakeGun);
+      Events.onCurrentHandshakeNode(() => {}, fakeGun.user());
     } catch (e) {
       expect(e.message).toBe(ErrorCode.NOT_AUTH);
       done();
@@ -214,17 +209,19 @@ describe("onCurrentHandshakeNode()", () => {
   it("supplies null if the gun has this edge set to null", done => {
     expect.assertions(1);
 
-    const fakeGun = createMockGun({
+    const gun = createMockGun({
       isAuth: true
     });
 
-    fakeGun.get(Key.CURRENT_HANDSHAKE_NODE).put(null, ack => {
+    const user = gun.user();
+
+    user.get(Key.CURRENT_HANDSHAKE_NODE).put(null, ack => {
       if (!ack.err) {
         const spy = jest.fn(() => {
           done();
         });
 
-        Events.onCurrentHandshakeNode(spy, fakeGun);
+        Events.onCurrentHandshakeNode(spy, user);
 
         expect(spy).toHaveBeenCalledWith(null);
       }
@@ -233,11 +230,13 @@ describe("onCurrentHandshakeNode()", () => {
 
   it("supplies an empty object if the handshake node only contains an invalid\
       initialization item", done => {
-    const fakeGun = createMockGun({
+    const gun = createMockGun({
       isAuth: true
     });
 
-    fakeGun.get(Key.CURRENT_HANDSHAKE_NODE).set(
+    const user = gun.user();
+
+    user.get(Key.CURRENT_HANDSHAKE_NODE).set(
       {
         unused: 0
       },
@@ -247,7 +246,7 @@ describe("onCurrentHandshakeNode()", () => {
             done();
           });
 
-          Events.onCurrentHandshakeNode(spy, fakeGun);
+          Events.onCurrentHandshakeNode(spy, user);
 
           expect(spy).toHaveBeenCalledWith({});
         }
@@ -265,11 +264,13 @@ describe("onCurrentHandshakeNode()", () => {
       timestamp: Math.random()
     };
 
-    const fakeGun = createMockGun({
+    const gun = createMockGun({
       isAuth: true
     });
 
-    const someHandshakeRequestNode = fakeGun
+    const user = gun.user();
+
+    const someHandshakeRequestNode = user
       .get(Key.CURRENT_HANDSHAKE_NODE)
       .set(someHandshakeRequest, ack => {
         if (ack.err) {
@@ -292,7 +293,7 @@ describe("onCurrentHandshakeNode()", () => {
       done();
     });
 
-    Events.onCurrentHandshakeNode(spy, fakeGun);
+    Events.onCurrentHandshakeNode(spy, user);
   });
 });
 
@@ -301,7 +302,7 @@ describe("onDisplayName()", () => {
     const fakeGun = createMockGun();
 
     try {
-      Events.onDisplayName(() => {}, fakeGun);
+      Events.onDisplayName(() => {}, fakeGun.user());
     } catch (e) {
       expect(e.message).toBe(ErrorCode.NOT_AUTH);
       done();
@@ -313,9 +314,11 @@ describe("onDisplayName()", () => {
       isAuth: true
     });
 
+    const user = fakeGun.user();
+
     const initialValue = Math.random().toString();
 
-    fakeGun
+    user
       .get(Key.PROFILE)
       .get(Key.DISPLAY_NAME)
       .put(initialValue);
@@ -324,7 +327,7 @@ describe("onDisplayName()", () => {
       done();
     });
 
-    Events.onDisplayName(spy, fakeGun);
+    Events.onDisplayName(spy, user);
 
     expect(spy).toHaveBeenCalledWith(initialValue);
   });
@@ -343,7 +346,7 @@ describe("onDisplayName()", () => {
       done();
     });
 
-    Events.onDisplayName(spy, fakeGun);
+    Events.onDisplayName(spy, fakeGun.user());
 
     expect(spy).toHaveBeenCalledWith(null);
   });
@@ -352,15 +355,14 @@ describe("onDisplayName()", () => {
 describe("onIncomingMessages()", () => {});
 
 describe("onOutgoing()", () => {
-  it("throws a NOT_AUTH error if supplied with a non authenticated node", done => {
+  it("throws a NOT_AUTH error if supplied with a non authenticated node", async () => {
     const fakeGun = createMockGun();
-    const user = createMockGun();
+    const user = createMockGun().user();
 
     try {
-      Events.onOutgoing(() => {}, fakeGun, user, Sea);
+      await Events.onOutgoing(() => {}, fakeGun, user, Sea);
     } catch (e) {
       expect(e.message).toBe(ErrorCode.NOT_AUTH);
-      done();
     }
   });
 
@@ -371,7 +373,7 @@ describe("onOutgoing()", () => {
     const user = createMockGun({
       initialData: [],
       isAuth: true
-    });
+    }).user();
 
     const spy = jest.fn();
 
@@ -380,81 +382,28 @@ describe("onOutgoing()", () => {
     expect(spy).toHaveBeenCalledTimes(0);
   });
 
-  it("calls the listener when there's valid data", done => {
-    const someOutgoings = [
-      { with: Math.random().toString() },
-      { with: Math.random().toString() }
-    ];
+  it("supplies the listener with messages for an outgoing", async () => {
+    const { gun, requestor } = await TestUtils.createWithSuccessfulHandshake();
 
-    const gun = createMockGun();
+    /** @type {Record<string, import("./schema").Outgoing>} */
+    const outgoings = await new Promise(res => {
+      let calls = 0;
 
-    const user = createMockGun({
-      isAuth: true
+      Events.onOutgoing(
+        _outgoings => {
+          if (calls === 2) {
+            res(_outgoings);
+          }
+
+          calls++;
+        },
+        gun,
+        requestor,
+        Sea
+      );
     });
 
-    const outgoingsNode = user.get(Key.OUTGOINGS);
-
-    someOutgoings.forEach(io => {
-      outgoingsNode.set(io);
-    });
-
-    const spy = jest.fn(() => {
-      done();
-    });
-
-    Events.onOutgoing(spy, gun, user, Sea);
-
-    const [call] = spy.mock.calls;
-    // @ts-ignore
-    const [data] = call;
-
-    expect(
-      // @ts-ignore
-      Object.values(data).every(og =>
-        someOutgoings.some(og2 => og.with === og2.with)
-      )
-    ).toBe(true);
-  });
-
-  it("supplies the listener with messages for an outgoing", () => {
-    const gun = createMockGun({});
-
-    const user = createMockGun({
-      isAuth: true
-    });
-
-    const outgoingsNode = gun.get(Key.OUTGOINGS);
-
-    /** @type {Message} */
-    const sampleMsg = {
-      body: Math.random().toString(),
-      timestamp: Math.random()
-    };
-
-    /** @type {PartialOutgoing} */
-    const sampleOutgoing = {
-      with: Math.random().toString()
-    };
-
-    const sampleOutgoingNode = outgoingsNode.set(sampleOutgoing);
-
-    sampleOutgoingNode.get(Key.MESSAGES).set(sampleMsg);
-
-    Events.onOutgoing(
-      outgoingsReceived => {
-        const [outgoingReceived] = Object.values(outgoingsReceived);
-
-        const [msgReceived] = Object.values(outgoingReceived.messages);
-
-        expect({
-          ...msgReceived,
-          _: undefined
-        }).toEqual(sampleMsg);
-      },
-      gun,
-      user,
-      Sea
-    );
+    expect(Object.values(outgoings)).toHaveLength(1);
   });
 });
 
@@ -463,7 +412,7 @@ describe("onSentRequests()", () => {
     const fakeGun = createMockGun();
 
     try {
-      Events.onSentRequests(() => {}, fakeGun);
+      Events.onSentRequests(() => {}, fakeGun.user());
     } catch (e) {
       expect(e.message).toBe(ErrorCode.NOT_AUTH);
       done();
@@ -480,7 +429,7 @@ describe("onSentRequests()", () => {
       createMockGun({
         initialData: [],
         isAuth: true
-      })
+      }).user()
     );
 
     expect(spy).toHaveBeenCalledTimes(0);
@@ -516,131 +465,17 @@ describe("onSentRequests()", () => {
       done();
     });
 
-    const gun = createMockGun({
+    const user = createMockGun({
       isAuth: true
-    });
+    }).user();
 
     someSentRequests.forEach(r => {
-      gun.get(Key.SENT_REQUESTS).set(r);
+      user.get(Key.SENT_REQUESTS).set(r);
     });
 
-    Events.onSentRequests(spy, gun);
+    Events.onSentRequests(spy, user);
   });
 });
-
-const setUpChats = async () => {
-  const requestorPK = "REQUESTOR_PK";
-  const recipientPK = "RECIPIENT_PK";
-  const gun = createMockGun();
-
-  const requestorNode = gun.get(__MOCK_USER_SUPER_NODE).get(requestorPK);
-  const recipientNode = gun.get(__MOCK_USER_SUPER_NODE).get(recipientPK);
-
-  let reqOutID = "";
-  let recOutID = "";
-
-  // We hardcode a few things that should happen in both
-  // Actions.sendRequest() and Actions.acceptRequest() to avoid going
-  // through all of that mess (creating a request, spinning up the
-  // onAcceptedRequest job, etc). All of that should be covered in an
-  // integration test.
-
-  await new Promise((res, rej) => {
-    injectSeaMockToGun(gun, () => requestorPK);
-
-    const requestorUser = gun.user();
-
-    requestorUser.auth(
-      Math.random().toString(),
-      Math.random().toString(),
-      async ack => {
-        if (ack.err) {
-          rej(new Error(ack.err));
-        } else {
-          reqOutID = await Actions.__createOutgoingFeed(
-            recipientPK,
-            requestorUser,
-            Sea
-          );
-          res();
-        }
-      }
-    );
-  });
-
-  await new Promise((res, rej) => {
-    injectSeaMockToGun(gun, () => recipientPK);
-
-    const recipientUser = gun.user();
-
-    recipientUser.auth(
-      Math.random().toString(),
-      Math.random().toString(),
-      async ack => {
-        if (ack.err) {
-          rej(new Error(ack.err));
-        } else {
-          recOutID = await Actions.__createOutgoingFeed(
-            requestorPK,
-            recipientUser,
-            Sea
-          );
-          res();
-        }
-      }
-    );
-  });
-
-  // @ts-ignore
-  gun.user = null;
-
-  await new Promise((res, rej) => {
-    requestorNode
-      .get(Key.USER_TO_INCOMING)
-      .get(recipientPK)
-      .put(recOutID, ack => {
-        if (ack.err) {
-          rej(ack.err);
-        } else {
-          res();
-        }
-      });
-  });
-
-  await new Promise((res, rej) => {
-    recipientNode
-      .get(Key.USER_TO_INCOMING)
-      .get(requestorPK)
-      .put(reqOutID, ack => {
-        if (ack.err) {
-          rej(ack.err);
-        } else {
-          res();
-        }
-      });
-  });
-
-  injectSeaMockToGun(gun, () => requestorPK);
-
-  const reqUser = gun.user();
-
-  await new Promise((res, rej) => {
-    reqUser.auth(Math.random().toString(), Math.random().toString(), ack => {
-      if (ack.err) {
-        rej(ack.err);
-      } else {
-        res();
-      }
-    });
-  });
-
-  return {
-    gun,
-    recipientNode,
-    requestorNode,
-    reqUser
-  };
-};
 
 describe("onChats()", () => {
   it("provides no chats even though there are outgoing chats but those haven't been accepted therefore no user-to-incoming records", done => {
@@ -648,10 +483,7 @@ describe("onChats()", () => {
 
     const gun = createMockGun();
 
-    const requestorPK = Math.random().toString();
     const recipientPK = Math.random().toString();
-
-    injectSeaMockToGun(gun, () => requestorPK);
 
     const ownUser = gun.user();
 
@@ -684,105 +516,88 @@ describe("onChats()", () => {
     });
   });
 
-  it("provides a chat corresponding to an user-to-incoming record", async done => {
-    expect.assertions(1);
-
-    const { gun, reqUser } = await setUpChats();
-
-    let calls = 0;
-
-    Events.onChats(
-      chats => {
-        calls++;
-
-        // third time is the charm
-        if (calls === 4) {
-          expect(chats.length).toBe(1);
-          done();
-        }
-      },
-      gun,
-      reqUser,
-      Sea
-    );
-  });
-
   it("provides the recipient's avatar if available", async done => {
     expect.assertions(1);
 
-    const { gun, recipientNode, reqUser } = await setUpChats();
+    const {
+      gun,
+      recipient,
+      requestor
+    } = await TestUtils.createWithSuccessfulHandshake();
 
-    let calls = 0;
+    const newAvatar = Math.random().toString();
 
-    const avatar = Math.random().toString();
-
-    await new Promise((res, rej) => {
-      recipientNode
+    await new Promise(res =>
+      recipient
         .get(Key.PROFILE)
         .get(Key.AVATAR)
-        .put(avatar, ack => {
-          if (ack.err) {
-            rej(ack.err);
-          } else {
-            res();
+        .put(newAvatar, res)
+    );
+
+    /** @type {Chat[]} */
+    const chats = await new Promise(res => {
+      let calls = 0;
+
+      Events.onChats(
+        _chats => {
+          if (calls === 4) {
+            res(_chats);
           }
-        });
+
+          calls++;
+        },
+        gun,
+        requestor,
+        Sea
+      );
     });
 
-    Events.onChats(
-      chats => {
-        calls++;
+    const [chat] = chats;
 
-        if (calls === 5) {
-          const [chat] = chats;
-
-          expect(chat.recipientAvatar).toEqual(avatar);
-          done();
-        }
-      },
-      gun,
-      reqUser,
-      Sea
-    );
+    expect(chat.recipientAvatar).toBe(newAvatar);
+    done();
   });
 
   it("provides the recipient's display name if available", async done => {
     expect.assertions(1);
 
-    const { gun, recipientNode, reqUser } = await setUpChats();
+    const {
+      gun,
+      recipient,
+      requestor
+    } = await TestUtils.createWithSuccessfulHandshake();
 
-    const displayName = Math.random().toString();
+    const newDisplayName = Math.random().toString();
 
-    await new Promise((res, rej) => {
-      recipientNode
+    await new Promise(res =>
+      recipient
         .get(Key.PROFILE)
         .get(Key.DISPLAY_NAME)
-        .put(displayName, ack => {
-          if (ack.err) {
-            rej(ack.err);
-          } else {
-            res();
+        .put(newDisplayName, res)
+    );
+
+    /** @type {Chat[]} */
+    const chats = await new Promise(res => {
+      let calls = 0;
+
+      Events.onChats(
+        _chats => {
+          if (calls === 4) {
+            res(_chats);
           }
-        });
+
+          calls++;
+        },
+        gun,
+        requestor,
+        Sea
+      );
     });
 
-    let calls = 0;
+    const [chat] = chats;
 
-    Events.onChats(
-      chats => {
-        calls++;
-
-        if (calls === 5) {
-          const [chat] = chats;
-
-          expect(chat.recipientDisplayName).toEqual(displayName);
-          done();
-        }
-      },
-      gun,
-      reqUser,
-      Sea
-    );
+    expect(chat.recipientDisplayName).toBe(newDisplayName);
+    done();
   });
 });
 
@@ -790,212 +605,55 @@ describe("onSimplerSentRequests()", () => {
   it("provides sent requests that have not been accepted", async done => {
     expect.assertions(1);
 
-    const gun = createMockGun();
+    const { gun, requestor } = await TestUtils.createWithHandshakeAttempt();
 
-    // we still need this for gun.user(pk) calls inside functions
-    injectSeaMockToGun(gun);
+    const sentRequests = await new Promise(res => {
+      let calls = 0;
 
-    const requestorPK = Math.round(Math.random() * 1000000000).toString();
+      Events.onSimplerSentRequests(
+        _sentRequests => {
+          if (calls === 2) {
+            res(_sentRequests);
+          }
 
-    const recipientPK = Math.round(Math.random() * 1000000000).toString();
-
-    // SEA mocker can only mock one user at a time. Get around this.
-
-    // technically wrong cast but typescript doesn't complain
-    const requestorUser = /** @type {UserGUNNode} */ (gun
-      .get(__MOCK_USER_SUPER_NODE)
-      .get(requestorPK));
-
-    // @ts-ignore
-    requestorUser.is = {
-      pub: requestorPK
-    };
-
-    // technically wrong cast but typescript doesn't complain
-    const recipientUser = /** @type {UserGUNNode} */ (gun
-      .get(__MOCK_USER_SUPER_NODE)
-      .get(recipientPK));
-
-    // @ts-ignore
-    recipientUser.is = {
-      pub: recipientPK
-    };
-
-    Jobs.onAcceptedRequests(Events.onSentRequests, gun, requestorUser, Sea);
-
-    await Actions.generateNewHandshakeNode(gun, recipientUser);
-
-    /** @type {string} */
-    const recipientHandshakeAddress = await new Promise((res, rej) => {
-      recipientUser.get(Key.CURRENT_HANDSHAKE_NODE).once(handshakeNode => {
-        if (typeof handshakeNode === "object" && handshakeNode !== null) {
-          res(handshakeNode._["#"]);
-        } else {
-          rej("typeof handshakeNode === 'object' || handshakeNode === null");
-        }
-      });
+          calls++;
+        },
+        gun,
+        requestor,
+        Sea
+      );
     });
 
-    await Actions.sendHandshakeRequest(
-      recipientHandshakeAddress,
-      recipientPK,
-      gun,
-      requestorUser,
-      Sea
-    );
-
-    let calls = 0;
-
-    Events.onSimplerSentRequests(
-      sentRequests => {
-        calls++;
-
-        if (calls === 2) {
-          try {
-            expect(sentRequests.length).toBe(1);
-            done();
-          } catch (e) {
-            console.error(e);
-          }
-        }
-      },
-      gun,
-      requestorUser,
-      Sea
-    );
+    expect(sentRequests).toHaveLength(1);
+    done();
 
     //
   });
 
   it("does not provide sent requests that have been accepted", async done => {
-    const gun = createMockGun();
+    expect.assertions(1);
 
-    const requestorPK = Math.random().toString();
+    const { gun, requestor } = await TestUtils.createWithSuccessfulHandshake();
 
-    const recipientPK = Math.random().toString();
+    const sentRequests = await new Promise(res => {
+      let calls = 0;
 
-    injectSeaMockToGun(gun);
+      Events.onSimplerSentRequests(
+        _sentRequests => {
+          if (calls === 2) {
+            res(_sentRequests);
+          }
 
-    const recipientUser = gun.user();
-
-    await new Promise((res, rej) => {
-      recipientUser.auth(recipientPK, Math.random().toString(), ack => {
-        if (ack.err) {
-          rej(ack.err);
-        } else {
-          res();
-        }
-      });
+          calls++;
+        },
+        gun,
+        requestor,
+        Sea
+      );
     });
 
-    await Actions.generateNewHandshakeNode(gun, recipientUser);
-
-    /** @type {string} */
-    const recipientHandshakeAddress = await new Promise((res, rej) => {
-      recipientUser.get(Key.CURRENT_HANDSHAKE_NODE).once(handshakeNode => {
-        if (typeof handshakeNode === "object" && handshakeNode !== null) {
-          res(handshakeNode._["#"]);
-        } else {
-          rej("typeof handshakeNode === 'object' || handshakeNode === null");
-        }
-      });
-    });
-
-    const requestorUser = gun.user();
-
-    await new Promise((res, rej) => {
-      requestorUser.auth(requestorPK, Math.random().toString(), ack => {
-        if (ack.err) {
-          rej(ack.err);
-        } else {
-          res();
-        }
-      });
-    });
-
-    // SEA mocker can only mock one user at a time. Get around this.
-
-    // technically wrong cast but typescript doesn't complain
-    const pseudoRequestorNode = /** @type {UserGUNNode} */ (gun
-      .get(__MOCK_USER_SUPER_NODE)
-      .get(requestorPK));
-
-    // @ts-ignore
-    pseudoRequestorNode.is = {
-      pub: requestorPK
-    };
-
-    Jobs.onAcceptedRequests(
-      Events.onSentRequests,
-      gun,
-      pseudoRequestorNode,
-      Sea
-    );
-
-    await Actions.sendHandshakeRequest(
-      recipientHandshakeAddress,
-      recipientPK,
-      gun,
-      requestorUser,
-      Sea
-    );
-
-    const recipientUserAgain = gun.user();
-
-    await new Promise((res, rej) => {
-      recipientUserAgain.auth(recipientPK, Math.random().toString(), ack => {
-        if (ack.err) {
-          rej(ack.err);
-        } else {
-          res();
-        }
-      });
-    });
-
-    const requestID = await new Promise(res => {
-      gun
-        .get(__MOCK_USER_SUPER_NODE)
-        .get(requestorPK)
-        .get(Key.REQUEST_TO_USER)
-        .once()
-        .map()
-        .once((_, reqID) => {
-          res(reqID);
-        });
-    });
-
-    await Actions.acceptRequest(requestID, gun, recipientUserAgain, Sea);
-
-    const requestorUserAgain = gun.user();
-
-    await new Promise((res, rej) => {
-      requestorUserAgain.auth(requestorPK, Math.random().toString(), ack => {
-        if (ack.err) {
-          rej(ack.err);
-        } else {
-          res();
-        }
-      });
-    });
-
-    let called = false;
-
-    Events.onSimplerSentRequests(
-      sentRequests => {
-        // first call will always receive an empty array
-        if (!called) {
-          called = true;
-          return;
-        }
-
-        expect(sentRequests.length).toBe(0);
-
-        done();
-      },
-      gun,
-      requestorUserAgain,
-      Sea
-    );
+    expect(sentRequests).toHaveLength(0);
+    done();
 
     //
   });
@@ -1003,106 +661,40 @@ describe("onSimplerSentRequests()", () => {
   it("only provides the latest request made to a single user", async done => {
     expect.assertions(1);
 
-    const gun = createMockGun();
-
-    // we still need this for gun.user(pk) calls inside functions
-    injectSeaMockToGun(gun);
-
-    const requestorPK = Math.round(Math.random() * 1000000000).toString();
-
-    const recipientPK = Math.round(Math.random() * 1000000000).toString();
-
-    // SEA mocker can only mock one user at a time. Get around this.
-
-    // technically wrong cast but typescript doesn't complain
-    const requestorUser = /** @type {UserGUNNode} */ (gun
-      .get(__MOCK_USER_SUPER_NODE)
-      .get(requestorPK));
-
-    // @ts-ignore
-    requestorUser.is = {
-      pub: requestorPK
-    };
-
-    // technically wrong cast but typescript doesn't complain
-    const recipientUser = /** @type {UserGUNNode} */ (gun
-      .get(__MOCK_USER_SUPER_NODE)
-      .get(recipientPK));
-
-    // @ts-ignore
-    recipientUser.is = {
-      pub: recipientPK
-    };
-
-    Jobs.onAcceptedRequests(Events.onSentRequests, gun, requestorUser, Sea);
-
-    await Actions.generateNewHandshakeNode(gun, recipientUser);
-
-    /** @type {string} */
-    const recipientHandshakeAddress = await new Promise((res, rej) => {
-      recipientUser.get(Key.CURRENT_HANDSHAKE_NODE).once(handshakeNode => {
-        if (typeof handshakeNode === "object" && handshakeNode !== null) {
-          res(handshakeNode._["#"]);
-        } else {
-          rej("typeof handshakeNode === 'object' || handshakeNode === null");
-        }
-      });
-    });
+    const {
+      gun,
+      requestor,
+      recipientPub,
+      recipientHandshakeAddress
+    } = await TestUtils.createWithHandshakeAttempt();
 
     await Actions.sendHandshakeRequest(
       recipientHandshakeAddress,
-      recipientPK,
+      recipientPub,
       gun,
-      requestorUser,
+      requestor,
       Sea
     );
 
-    await Actions.generateNewHandshakeNode(gun, recipientUser);
+    const sentRequests = await new Promise(res => {
+      let calls = 0;
 
-    /** @type {string} */
-    const secondRecipientHandshakeAddress = await new Promise((res, rej) => {
-      recipientUser.get(Key.CURRENT_HANDSHAKE_NODE).once(handshakeNode => {
-        if (typeof handshakeNode === "object" && handshakeNode !== null) {
-          res(handshakeNode._["#"]);
-        } else {
-          rej("typeof handshakeNode === 'object' || handshakeNode === null");
-        }
-      });
-    });
-
-    // ensure the second request doesnt have the same timestamp as the first one
-    await new Promise(res => {
-      setTimeout(res, 200);
-    });
-
-    await Actions.sendHandshakeRequest(
-      secondRecipientHandshakeAddress,
-      recipientPK,
-      gun,
-      requestorUser,
-      Sea
-    );
-
-    let calls = 0;
-
-    Events.onSimplerSentRequests(
-      sentRequests => {
-        calls++;
-
-        if (calls === 4) {
-          try {
-            expect(sentRequests.length).toBe(1);
-          } catch (e) {
-            console.log(e);
+      Events.onSimplerSentRequests(
+        _sentRequests => {
+          if (calls === 2) {
+            res(_sentRequests);
           }
 
-          done();
-        }
-      },
-      gun,
-      requestorUser,
-      Sea
-    );
+          calls++;
+        },
+        gun,
+        requestor,
+        Sea
+      );
+    });
+
+    expect(sentRequests).toHaveLength(1);
+    done();
 
     //
   });
@@ -1110,83 +702,37 @@ describe("onSimplerSentRequests()", () => {
   it("indicates when the recipient has changed the handshake address in which the request was placed", async done => {
     expect.assertions(1);
 
-    const gun = createMockGun();
+    const {
+      gun,
+      requestor,
+      recipient
+    } = await TestUtils.createWithHandshakeAttempt();
 
-    // we still need this for gun.user(pk) calls inside functions
-    injectSeaMockToGun(gun);
+    await Actions.generateNewHandshakeNode(gun, recipient);
 
-    const requestorPK = Math.round(Math.random() * 1000000000).toString();
+    /** @type {import("./schema").SimpleSentRequest[]} */
+    const sentRequests = await new Promise(res => {
+      let calls = 0;
 
-    const recipientPK = Math.round(Math.random() * 1000000000).toString();
+      Events.onSimplerSentRequests(
+        _sentRequests => {
+          if (calls === 2) {
+            res(_sentRequests);
+          }
 
-    // SEA mocker can only mock one user at a time. Get around this.
-
-    // technically wrong cast but typescript doesn't complain
-    const requestorUser = /** @type {UserGUNNode} */ (gun
-      .get(__MOCK_USER_SUPER_NODE)
-      .get(requestorPK));
-
-    // @ts-ignore
-    requestorUser.is = {
-      pub: requestorPK
-    };
-
-    // technically wrong cast but typescript doesn't complain
-    const recipientUser = /** @type {UserGUNNode} */ (gun
-      .get(__MOCK_USER_SUPER_NODE)
-      .get(recipientPK));
-
-    // @ts-ignore
-    recipientUser.is = {
-      pub: recipientPK
-    };
-
-    Jobs.onAcceptedRequests(Events.onSentRequests, gun, requestorUser, Sea);
-
-    await Actions.generateNewHandshakeNode(gun, recipientUser);
-
-    /** @type {string} */
-    const recipientHandshakeAddress = await new Promise((res, rej) => {
-      recipientUser.get(Key.CURRENT_HANDSHAKE_NODE).once(handshakeNode => {
-        if (typeof handshakeNode === "object" && handshakeNode !== null) {
-          res(handshakeNode._["#"]);
-        } else {
-          rej("typeof handshakeNode === 'object' || handshakeNode === null");
-        }
-      });
+          calls++;
+        },
+        gun,
+        requestor,
+        Sea
+      );
     });
 
-    await Actions.sendHandshakeRequest(
-      recipientHandshakeAddress,
-      recipientPK,
-      gun,
-      requestorUser,
-      Sea
-    );
+    const [req] = sentRequests;
 
-    await Actions.generateNewHandshakeNode(gun, recipientUser);
+    expect(req.recipientChangedRequestAddress).toBe(true);
 
-    let calls = 0;
-
-    Events.onSimplerSentRequests(
-      sentRequests => {
-        calls++;
-
-        if (calls === 3) {
-          const [request] = sentRequests;
-
-          try {
-            expect(request.recipientChangedRequestAddress).toBe(true);
-            done();
-          } catch (e) {
-            console.error(e);
-          }
-        }
-      },
-      gun,
-      requestorUser,
-      Sea
-    );
+    done();
 
     //
   });
@@ -1194,189 +740,84 @@ describe("onSimplerSentRequests()", () => {
   it("provides the recipient's avatar", async done => {
     expect.assertions(1);
 
-    const gun = createMockGun();
+    const {
+      gun,
+      requestor,
+      recipient
+    } = await TestUtils.createWithHandshakeAttempt();
 
-    // we still need this for gun.user(pk) calls inside functions
-    injectSeaMockToGun(gun);
+    const newRecipientAvatar = Math.random().toString();
 
-    const requestorPK = Math.round(Math.random() * 1000000000).toString();
-
-    const recipientPK = Math.round(Math.random() * 1000000000).toString();
-
-    const recipientAvatar = Math.random().toString();
-
-    // SEA mocker can only mock one user at a time. Get around this.
-
-    // technically wrong cast but typescript doesn't complain
-    const requestorUser = /** @type {UserGUNNode} */ (gun
-      .get(__MOCK_USER_SUPER_NODE)
-      .get(requestorPK));
-
-    // @ts-ignore
-    requestorUser.is = {
-      pub: requestorPK
-    };
-
-    // technically wrong cast but typescript doesn't complain
-    const recipientUser = /** @type {UserGUNNode} */ (gun
-      .get(__MOCK_USER_SUPER_NODE)
-      .get(recipientPK));
-
-    // @ts-ignore
-    recipientUser.is = {
-      pub: recipientPK
-    };
-
-    await new Promise(res => {
-      recipientUser
+    await new Promise(res =>
+      recipient
         .get(Key.PROFILE)
         .get(Key.AVATAR)
-        .put(recipientAvatar, ack => {
-          if (!ack.err) {
-            res();
-          }
-        });
-    });
-
-    Jobs.onAcceptedRequests(Events.onSentRequests, gun, requestorUser, Sea);
-
-    await Actions.generateNewHandshakeNode(gun, recipientUser);
-
-    /** @type {string} */
-    const recipientHandshakeAddress = await new Promise((res, rej) => {
-      recipientUser.get(Key.CURRENT_HANDSHAKE_NODE).once(handshakeNode => {
-        if (typeof handshakeNode === "object" && handshakeNode !== null) {
-          res(handshakeNode._["#"]);
-        } else {
-          rej("typeof handshakeNode === 'object' || handshakeNode === null");
-        }
-      });
-    });
-
-    await Actions.sendHandshakeRequest(
-      recipientHandshakeAddress,
-      recipientPK,
-      gun,
-      requestorUser,
-      Sea
+        .put(newRecipientAvatar, res)
     );
 
-    let calls = 0;
+    /** @type {import("./schema").SimpleSentRequest[]} */
+    const sentRequests = await new Promise(res => {
+      let calls = 0;
 
-    Events.onSimplerSentRequests(
-      sentRequests => {
-        calls++;
-
-        if (calls === 3) {
-          const [request] = sentRequests;
-
-          try {
-            expect(request.recipientAvatar).toMatch(recipientAvatar);
-            done();
-          } catch (e) {
-            console.error(e);
+      Events.onSimplerSentRequests(
+        _sentRequests => {
+          if (calls === 2) {
+            res(_sentRequests);
           }
-        }
-      },
-      gun,
-      requestorUser,
-      Sea
-    );
+
+          calls++;
+        },
+        gun,
+        requestor,
+        Sea
+      );
+    });
+
+    const [req] = sentRequests;
+    expect(req.recipientAvatar).toBe(newRecipientAvatar);
+    done();
 
     //
   });
 
   it("provides the recipient's display name", async done => {
-    expect.assertions(1);
+    const {
+      gun,
+      recipient,
+      requestor
+    } = await TestUtils.createWithHandshakeAttempt();
 
-    const gun = createMockGun();
+    const newDisplayName = Math.random().toString();
 
-    // we still need this for gun.user(pk) calls inside functions
-    injectSeaMockToGun(gun);
-
-    const requestorPK = Math.round(Math.random() * 1000000000).toString();
-
-    const recipientPK = Math.round(Math.random() * 1000000000).toString();
-
-    const recipientDisplayName = Math.random().toString();
-
-    // SEA mocker can only mock one user at a time. Get around this.
-
-    // technically wrong cast but typescript doesn't complain
-    const requestorUser = /** @type {UserGUNNode} */ (gun
-      .get(__MOCK_USER_SUPER_NODE)
-      .get(requestorPK));
-
-    // @ts-ignore
-    requestorUser.is = {
-      pub: requestorPK
-    };
-
-    // technically wrong cast but typescript doesn't complain
-    const recipientUser = /** @type {UserGUNNode} */ (gun
-      .get(__MOCK_USER_SUPER_NODE)
-      .get(recipientPK));
-
-    // @ts-ignore
-    recipientUser.is = {
-      pub: recipientPK
-    };
-
-    await new Promise(res => {
-      recipientUser
+    await new Promise(res =>
+      recipient
         .get(Key.PROFILE)
         .get(Key.DISPLAY_NAME)
-        .put(recipientDisplayName, ack => {
-          if (!ack.err) {
-            res();
-          }
-        });
-    });
-
-    Jobs.onAcceptedRequests(Events.onSentRequests, gun, requestorUser, Sea);
-
-    await Actions.generateNewHandshakeNode(gun, recipientUser);
-
-    /** @type {string} */
-    const recipientHandshakeAddress = await new Promise((res, rej) => {
-      recipientUser.get(Key.CURRENT_HANDSHAKE_NODE).once(handshakeNode => {
-        if (typeof handshakeNode === "object" && handshakeNode !== null) {
-          res(handshakeNode._["#"]);
-        } else {
-          rej("typeof handshakeNode === 'object' || handshakeNode === null");
-        }
-      });
-    });
-
-    await Actions.sendHandshakeRequest(
-      recipientHandshakeAddress,
-      recipientPK,
-      gun,
-      requestorUser,
-      Sea
+        .put(newDisplayName, res)
     );
 
-    let calls = 0;
+    /** @type {import("./schema").SimpleSentRequest[]} */
+    const sentRequests = await new Promise(res => {
+      let calls = 0;
 
-    Events.onSimplerSentRequests(
-      sentRequests => {
-        calls++;
-
-        if (calls === 3) {
-          const [request] = sentRequests;
-
-          try {
-            expect(request.recipientDisplayName).toMatch(recipientDisplayName);
-            done();
-          } catch (e) {
-            console.error(e);
+      Events.onSimplerSentRequests(
+        _sentRequests => {
+          if (calls === 3) {
+            res(_sentRequests);
           }
-        }
-      },
-      gun,
-      requestorUser,
-      Sea
-    );
+
+          calls++;
+        },
+        gun,
+        requestor,
+        Sea
+      );
+    });
+
+    const [req] = sentRequests;
+
+    expect(req.recipientDisplayName).toBe(newDisplayName);
+    done();
 
     //
   });
@@ -1391,164 +832,44 @@ describe("onSimplerReceivedRequests()", () => {
     }).toThrow();
   });
 
-  it("provides received requests that have not been accepted", async done => {
-    expect.assertions(4);
-
-    const gun = createMockGun();
-
-    injectSeaMockToGun(gun);
-
-    const user = gun.user();
-
-    const recipientPK = Math.random().toString();
-
-    const requestorPK = Math.random().toString();
-    const response = Math.random().toString();
-    const timestamp = Date.now();
-
-    await new Promise((res, rej) => {
-      user.auth(recipientPK, Math.random().toString(), ack => {
-        if (ack.err) {
-          rej(ack.err);
-        } else {
-          res();
-        }
-      });
-    });
-
-    await Actions.generateNewHandshakeNode(gun, user);
-
-    /** @type {HandshakeRequest} */
-    const req = {
-      from: requestorPK,
-      response,
-      timestamp
-    };
-
-    /** @type {GUNNode} */
-    const reqNode = await new Promise((res, rej) => {
-      const _reqNode = user.get(Key.CURRENT_HANDSHAKE_NODE).set(req, ack => {
-        if (ack.err) {
-          rej(ack.err);
-        } else {
-          res(_reqNode);
-        }
-      });
-    });
-
-    const reqID = /** @type {string} */ (reqNode._.get);
-
-    let calls = 0;
-
-    Events.onSimplerReceivedRequests(
-      receivedRequests => {
-        if (calls === 1) {
-          const [receivedReq] = receivedRequests;
-
-          expect(receivedReq.id).toMatch(reqID);
-          expect(receivedReq.requestorPK).toMatch(requestorPK);
-          expect(receivedReq.response).toMatch(response);
-          expect(receivedReq.timestamp).toBe(timestamp);
-
-          done();
-        }
-        calls++;
-      },
-      gun,
-      user,
-      Sea
-    );
-
-    //
-  });
-
   it("only provides the latest request if theres 2 requests from the same user", async done => {
-    expect.assertions(2);
+    expect.assertions(1);
 
-    const gun = createMockGun();
-
-    injectSeaMockToGun(gun);
-
-    const recipientUser = gun.user();
-
-    const recipientPK = Math.random().toString();
-
-    const requestorPK = Math.random().toString();
-
-    await new Promise((res, rej) => {
-      recipientUser.auth(recipientPK, Math.random().toString(), ack => {
-        if (ack.err) {
-          rej(ack.err);
-        } else {
-          res();
-        }
-      });
-    });
-
-    await Actions.generateNewHandshakeNode(gun, recipientUser);
-
-    /** @type {HandshakeRequest} */
-    const firstReq = {
-      from: requestorPK,
-      response: Math.random().toString(),
-      timestamp: Date.now()
-    };
-
-    // ensure two requests have different timestamps
-    await new Promise(res => setTimeout(res, 200));
-
-    /** @type {HandshakeRequest} */
-    const secondReq = {
-      from: requestorPK,
-      response: Math.random().toString(),
-      timestamp: Date.now()
-    };
-
-    await new Promise((res, rej) => {
-      recipientUser.get(Key.CURRENT_HANDSHAKE_NODE).set(firstReq, ack => {
-        if (ack.err) {
-          rej(ack.err);
-        } else {
-          res();
-        }
-      });
-    });
-
-    /** @type {GUNNode} */
-    const secondReqNode = await new Promise((res, rej) => {
-      const _reqNode = recipientUser
-        .get(Key.CURRENT_HANDSHAKE_NODE)
-        .set(secondReq, ack => {
-          if (ack.err) {
-            rej(ack.err);
-          } else {
-            res(_reqNode);
-          }
-        });
-    });
-
-    const reqID = /** @type {string} */ (secondReqNode._.get);
-
-    let calls = 0;
-
-    Events.onSimplerReceivedRequests(
-      receivedRequests => {
-        if (calls === 2) {
-          expect(receivedRequests.length).toBe(1);
-
-          const [req] = receivedRequests;
-
-          expect(req.id).toMatch(reqID);
-
-          done();
-        }
-
-        calls++;
-      },
+    const {
       gun,
-      recipientUser,
+      requestor,
+      recipient,
+      recipientPub,
+      recipientHandshakeAddress
+    } = await TestUtils.createWithHandshakeAttempt();
+
+    await Actions.sendHandshakeRequest(
+      recipientHandshakeAddress,
+      recipientPub,
+      gun,
+      requestor,
       Sea
     );
+
+    const receivedRequests = await new Promise(res => {
+      let calls = 0;
+
+      Events.onSimplerReceivedRequests(
+        _receivedRequests => {
+          if (calls === 2) {
+            res(_receivedRequests);
+          }
+
+          calls++;
+        },
+        gun,
+        recipient,
+        Sea
+      );
+    });
+
+    expect(receivedRequests).toHaveLength(1);
+    done();
 
     //
   });
@@ -1557,8 +878,6 @@ describe("onSimplerReceivedRequests()", () => {
     expect.assertions(2);
 
     const gun = createMockGun();
-
-    injectSeaMockToGun(gun);
 
     const recipientUser = gun.user();
     const recipientPK = Math.random().toString();
@@ -1605,6 +924,7 @@ describe("onSimplerReceivedRequests()", () => {
       requestorUser,
       Sea
     );
+
     const reqID = await new Promise((res, rej) => {
       let calls = 0;
 
@@ -1671,8 +991,6 @@ describe("onSimplerReceivedRequests()", () => {
     expect.assertions(1);
 
     const gun = createMockGun();
-
-    injectSeaMockToGun(gun);
 
     const recipientUser = gun.user();
     const recipientPK = Math.random().toString();
@@ -1750,78 +1068,39 @@ describe("onSimplerReceivedRequests()", () => {
   it("provides the requestor's display name if it exists", async () => {
     expect.assertions(1);
 
-    const gun = createMockGun();
+    const {
+      gun,
+      recipient,
+      requestor
+    } = await TestUtils.createWithHandshakeAttempt();
 
-    injectSeaMockToGun(gun);
-
-    const recipientUser = gun.user();
-    const recipientPK = Math.random().toString();
-
-    await new Promise((res, rej) => {
-      recipientUser.auth(recipientPK, Math.random().toString(), ack => {
-        if (ack.err) {
-          rej(ack.err);
-        } else {
-          res();
-        }
-      });
-    });
-
-    const requestorUser = gun.user();
-    const requestorPK = Math.random().toString();
     const requestorDisplayName = Math.random().toString();
 
-    await new Promise((res, rej) => {
-      requestorUser.auth(requestorPK, Math.random().toString(), ack => {
-        if (ack.err) {
-          rej(ack.err);
-        } else {
-          res();
-        }
-      });
-    });
+    await Actions.setDisplayName(requestorDisplayName, requestor);
 
-    await Actions.setDisplayName(requestorDisplayName, requestorUser);
-
-    await Actions.generateNewHandshakeNode(gun, recipientUser);
-
-    const handshakeAddress = await new Promise((res, rej) => {
-      recipientUser.get(Key.CURRENT_HANDSHAKE_NODE).once(node => {
-        if (typeof node === "object" && node !== null) {
-          res(node._["#"]);
-        } else {
-          rej("Current Handshake Node not an object.");
-        }
-      });
-    });
-
-    await Actions.sendHandshakeRequest(
-      handshakeAddress,
-      recipientPK,
-      gun,
-      requestorUser,
-      Sea
-    );
-
-    return new Promise(res => {
+    /**
+     * @type {import("./schema").SimpleReceivedRequest[]}
+     */
+    const receivedRequests = await new Promise(res => {
       let calls = 0;
 
       Events.onSimplerReceivedRequests(
-        receivedRequests => {
+        _receivedRequests => {
           if (calls === 1) {
-            const [req] = receivedRequests;
-
-            expect(req.requestorDisplayName).toMatch(requestorDisplayName);
-
-            res();
+            res(_receivedRequests);
           }
+
           calls++;
         },
         gun,
-        recipientUser,
+        recipient,
         Sea
       );
     });
+
+    const [req] = receivedRequests;
+
+    expect(req.requestorDisplayName).toMatch(requestorDisplayName);
 
     //
   });

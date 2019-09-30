@@ -137,12 +137,12 @@ const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
     throw new Error(ErrorCode.NOT_AUTH);
   }
 
-  const secret = await SEA.secret(user._.sea.epub, user._.sea);
-  const encryptedRecipientPublicKey = await SEA.encrypt(withPublicKey, secret);
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+  const encryptedForMeRecipientPub = await SEA.encrypt(withPublicKey, mySecret);
 
   /** @type {PartialOutgoing} */
   const newPartialOutgoingFeed = {
-    with: encryptedRecipientPublicKey
+    with: encryptedForMeRecipientPub
   };
 
   /** @type {GUNNode} */
@@ -172,19 +172,6 @@ const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
     console.warn(
       `Got an error ${e.message} setting the initial message on an outgoing feed. Will now try to null out the outgoing feed...`
     );
-
-    user
-      .get(Key.OUTGOINGS)
-      .get(outgoingFeedID)
-      .put(null, ack => {
-        if (ack.err) {
-          console.warn(
-            "... WARNING: could not null out outgoing fee. This will result in an outgoing feed without an initial message which is unexpected behaviour."
-          );
-        } else {
-          console.warn("...successfully nulled out outgoing feed.");
-        }
-      });
   }
 
   return outgoingFeedID;
@@ -253,12 +240,22 @@ const acceptRequest = async (
     SEA
   );
 
-  const mySecret = await SEA.secret(user._.sea.pub, user._.sea);
+  /** @type {string} */
+  const requestorEpub = await new Promise(res => {
+    gun
+      .user(handshakeRequest.from)
+      .get("epub")
+      .once(epub => {
+        // @ts-ignore
+        res(epub);
+      });
+  });
 
-  const encryptedForMeIncomingID = await SEA.encrypt(
-    handshakeRequest.response,
-    mySecret
-  );
+  const ourSecret = await SEA.secret(requestorEpub, user._.sea);
+  const mySecret = await SEA.secret(user._.sea.pub, user._.sea);
+  const incomingID = await SEA.decrypt(handshakeRequest.response, ourSecret);
+
+  const encryptedForMeIncomingID = await SEA.encrypt(incomingID, mySecret);
 
   const encryptedForMeRequestorPK = await SEA.encrypt(
     handshakeRequest.from,
@@ -561,26 +558,14 @@ const sendHandshakeRequest = async (
       });
   });
 
-  await new Promise((res, rej) => {
-    user.get(Key.SENT_REQUESTS).set(handshakeRequest, ack => {
-      if (ack.err) {
-        rej(
-          new Error(
-            `Error saving newly created request to sent requests: ${ack.err}`
-          )
-        );
-      } else {
-        res();
-      }
-    });
-  });
-
   const encryptedForMeRequestID = await SEA.encrypt(
     /** @type {string} */ (handshakeRequest._.get),
     mySecret
   );
 
-  return new Promise((res, rej) => {
+  // This needs to come before the write to sent requests. Because that write
+  // triggers Jobs.onAcceptedRequests and it in turn reads from request-to-user
+  await new Promise((res, rej) => {
     user
       .get(Key.REQUEST_TO_USER)
       .get(encryptedForMeRequestID)
@@ -595,6 +580,20 @@ const sendHandshakeRequest = async (
           res();
         }
       });
+  });
+
+  await new Promise((res, rej) => {
+    user.get(Key.SENT_REQUESTS).set(handshakeRequest, ack => {
+      if (ack.err) {
+        rej(
+          new Error(
+            `Error saving newly created request to sent requests: ${ack.err}`
+          )
+        );
+      } else {
+        res();
+      }
+    });
   });
 };
 
