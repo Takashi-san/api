@@ -2,7 +2,6 @@
  * @prettier
  */
 import MockGun, { createMockGun } from "./mock-gun";
-import * as TestUtils from "../test-utils";
 /**
  * @typedef {import('../SimpleGUN').UserGUNNode} UserGUNNode
  * @typedef {import('../SimpleGUN').ValidDataValue} ValidDataValue
@@ -245,6 +244,7 @@ describe("MockGun", () => {
       // mockgun)
       await new Promise(res => gun.get(key).once(res));
 
+      // @ts-ignore
       const phantomSubGraphExists = typeof gun.graph[key] !== "undefined";
 
       expect(phantomSubGraphExists).toBe(false);
