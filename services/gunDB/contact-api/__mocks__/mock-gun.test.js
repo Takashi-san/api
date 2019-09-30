@@ -2,6 +2,7 @@
  * @prettier
  */
 import MockGun, { createMockGun } from "./mock-gun";
+import * as TestUtils from "../test-utils";
 /**
  * @typedef {import('../SimpleGUN').UserGUNNode} UserGUNNode
  * @typedef {import('../SimpleGUN').ValidDataValue} ValidDataValue
@@ -235,6 +236,20 @@ describe("MockGun", () => {
   });
 
   describe("get", () => {
+    it("Does not create a phantom node if a non-existing node is accessed", async () => {
+      const gun = createMockGun();
+
+      const key = Math.random().toString();
+
+      // this previously created an empty phantom subgraph (sub instance of
+      // mockgun)
+      await new Promise(res => gun.get(key).once(res));
+
+      const phantomSubGraphExists = typeof gun.graph[key] !== "undefined";
+
+      expect(phantomSubGraphExists).toBe(false);
+    });
+
     it("throws a TypeError if called without a key", () => {
       expect(() => {
         const gun = createMockGun();

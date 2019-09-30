@@ -121,9 +121,10 @@ export default class MockGun {
   nodeType = "undefined";
 
   /**
+   * @private
    * @type {Graph}
    */
-  graph = undefined;
+  _graph = undefined;
 
   /**
    * @type {Listener[]}
@@ -223,6 +224,37 @@ export default class MockGun {
             pub: Math.random().toString()
           }
     };
+  }
+
+  /**
+   * @returns {Graph}
+   */
+  get graph() {
+    // return this._graph;
+    if (
+      typeof this._graph === "object" &&
+      this._graph !== null &&
+      !(this._graph instanceof MockGun)
+    ) {
+      for (const [k, v] of Object.entries(this._graph)) {
+        if (typeof v === "undefined") {
+          delete this._graph[k];
+        }
+
+        if (v instanceof MockGun && typeof v._graph === "undefined") {
+          delete this._graph[k];
+        }
+      }
+    }
+
+    return this._graph;
+  }
+
+  /**
+   * @param {Graph} g
+   */
+  set graph(g) {
+    this._graph = g;
   }
 
   _notifyListeners() {
