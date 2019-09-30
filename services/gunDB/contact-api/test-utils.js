@@ -1,7 +1,6 @@
 /** @format */
 import * as Actions from "./actions";
 import * as Events from "./events";
-import Testing, { __MOCK_USER_SUPER_NODE } from "./testing";
 import { createMockGun } from "./__mocks__/mock-gun";
 import * as Jobs from "./jobs";
 import * as Key from "./key";
@@ -32,7 +31,6 @@ const Sea = SEA;
  */
 export const create = async () => {
   const gun = createMockGun();
-  Testing.injectSeaMockToGun(gun);
 
   const requestor = gun.user();
   await new Promise(res => requestor.auth("alice", "alice", res));
