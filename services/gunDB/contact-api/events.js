@@ -1,6 +1,7 @@
 /**
  * @prettier
  */
+const Actions = require("./actions");
 const ErrorCode = require("./errorCode");
 const Key = require("./key");
 const Schema = require("./schema");
@@ -91,7 +92,10 @@ const __onOutgoingMessage = async (outgoingKey, cb, gun, user, SEA) => {
       }
 
       const encryptedBody = msg.body;
-      const decryptedBody = await SEA.decrypt(encryptedBody, ourSecret);
+      const decryptedBody =
+        encryptedBody === Actions.INITIAL_MSG
+          ? encryptedBody
+          : await SEA.decrypt(encryptedBody, ourSecret);
 
       cb(
         {
@@ -384,11 +388,12 @@ const onIncomingMessages = (cb, userPK, incomingFeedID, gun, user, SEA) => {
       });
 
       const secret = await SEA.secret(recipientEpub, user._.sea);
-      // @ts-ignore TODO: See what's going on with typescript here
-      const decryptedBody = await SEA.decrypt(encryptedBody, secret);
 
       messages[key] = {
-        body: decryptedBody,
+        body:
+          encryptedBody === Actions.INITIAL_MSG
+            ? Actions.INITIAL_MSG
+            : await SEA.decrypt(encryptedBody, secret),
         timestamp: msg.timestamp
       };
 
@@ -734,11 +739,24 @@ const onSimplerReceivedRequests = (cb, gun, user, SEA) => {
   user
     .get(Key.CURRENT_HANDSHAKE_NODE)
     .map()
-    .on((req, reqID) => {
+    .on(async (req, reqID) => {
       if (!Schema.isHandshakeRequest(req)) {
         console.warn(`non request received: ${JSON.stringify(req)}`);
         return;
       }
+
+      const requestorEpub = await new Promise(res =>
+        gun
+          .user(req.from)
+          .get("epub")
+          .once(res)
+      );
+
+      const ourSecret = await SEA.secret(requestorEpub, user._.sea);
+      const decryptedResponse = await SEA.decrypt(req.response, ourSecret);
+
+      console.log(`encryptedResponse: ${req.response}`);
+      console.log(`decryptedResponse: ${decryptedResponse}`);
 
       if (!idToReceivedRequest[reqID]) {
         idToReceivedRequest[reqID] = {
@@ -746,7 +764,7 @@ const onSimplerReceivedRequests = (cb, gun, user, SEA) => {
           requestorAvatar: "",
           requestorDisplayName: "",
           requestorPK: req.from,
-          response: req.response,
+          response: decryptedResponse,
           timestamp: req.timestamp
         };
       }

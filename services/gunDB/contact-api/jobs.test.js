@@ -6,7 +6,6 @@ const ErrorCode = require("./errorCode");
 const Events = require("./events");
 const Jobs = require("./jobs");
 const Key = require("./key");
-const Testing = require("./testing");
 const { createMockGun } = require("./__mocks__/mock-gun");
 // @ts-ignore
 require("gun/sea");
@@ -23,7 +22,7 @@ describe("__onAcceptedRequests()", () => {
       await Jobs.onAcceptedRequests(
         () => {},
         createMockGun(),
-        createMockGun(),
+        createMockGun().user(),
         Sea
       );
     } catch (e) {
@@ -35,7 +34,6 @@ describe("__onAcceptedRequests()", () => {
     expect.assertions(2);
 
     const gun = createMockGun();
-    Testing.injectSeaMockToGun(gun);
 
     const requestorUser = gun.user();
     const recipientUser = gun.user();

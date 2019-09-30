@@ -50,12 +50,14 @@ exports.onAcceptedRequests = async (
   onSentRequestsFactory(async sentRequests => {
     for (const [reqKey, req] of Object.entries(sentRequests)) {
       try {
+        const encryptedForMeRequestID = await SEA.encrypt(reqKey, mySecret);
+
         /** @type {string|undefined} */
         const encryptedForMeRecipientPub = await new Promise((res, rej) => {
           user
             .get(Key.REQUEST_TO_USER)
-            .get(reqKey)
-            .once(async userPub => {
+            .get(encryptedForMeRequestID)
+            .once(userPub => {
               if (typeof userPub === "undefined") {
                 res(undefined);
                 return;
@@ -139,18 +141,13 @@ exports.onAcceptedRequests = async (
           return;
         }
 
-        const encryptedForMeRequestID = await SEA.encrypt(reqKey, mySecret);
-        const requestToUserRecord = user
-          .get(Key.REQUEST_TO_USER)
-          .get(encryptedForMeRequestID);
-        const userToIncomingRecord = user
-          .get(Key.USER_TO_INCOMING)
-          .get(encryptedForMeRecipientPub);
-
         const alreadyExists = await new Promise(res => {
-          userToIncomingRecord.once(feedIDRecord => {
-            res(typeof feedIDRecord !== "undefined");
-          });
+          user
+            .get(Key.USER_TO_INCOMING)
+            .get(encryptedForMeRecipientPub)
+            .once(feedIDRecord => {
+              res(typeof feedIDRecord !== "undefined");
+            });
         });
 
         // only set it once. Also prevents attacks if an attacker
@@ -159,9 +156,15 @@ exports.onAcceptedRequests = async (
           return;
         }
 
-        requestToUserRecord.put(encryptedForMeRecipientPub);
+        const encryptedForMeIncomingID = await SEA.encrypt(feedID, mySecret);
+
+        user
+          .get(Key.USER_TO_INCOMING)
+          .get(encryptedForMeRecipientPub)
+          .put(encryptedForMeIncomingID);
       } catch (e) {
-        console.warn(`Error inside Jobs.onAcceptedRequests: ${e.message}`);
+        console.error(`Error inside Jobs.onAcceptedRequests: ${e.message}`);
+        console.log(e);
       }
     }
   }, user);
