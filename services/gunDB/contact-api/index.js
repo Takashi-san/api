@@ -6,6 +6,5 @@ const Events = require("./events");
 const Jobs = require("./jobs");
 const Key = require("./key");
 const Schema = require("./schema");
-const Testing = require("./testing");
 
-module.exports = { Actions, Events, Jobs, Key, Schema, Testing };
+module.exports = { Actions, Events, Jobs, Key, Schema };
