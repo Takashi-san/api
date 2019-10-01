@@ -1,14 +1,15 @@
 /**
  * @prettier
  */
+const Actions = require("./actions");
 const ErrorCode = require("./errorCode");
 const Key = require("./key");
-const { gun: origGun, user: userGun } = require("./gun");
 const Schema = require("./schema");
 const uniqBy = require("lodash/uniqBy");
 /**
  * @typedef {import('./SimpleGUN').UserGUNNode} UserGUNNode
  * @typedef {import('./SimpleGUN').GUNNode} GUNNode
+ * @typedef {import('./SimpleGUN').ISEA} ISEA
  * @typedef {import('./schema').HandshakeRequest} HandshakeRequest
  * @typedef {import('./schema').Message} Message
  * @typedef {import('./schema').Outgoing} Outgoing
@@ -23,33 +24,97 @@ const uniqBy = require("lodash/uniqBy");
  *
  * @param {string} outgoingKey
  * @param {(message: Message, key: string) => void} cb
+ * @param {GUNNode} gun
  * @param {UserGUNNode} user
- * @returns {void}
+ * @param {ISEA} SEA
+ * @returns {Promise<void>}
  */
-const __onOutgoingMessage = (outgoingKey, cb, user) => {
+const __onOutgoingMessage = async (outgoingKey, cb, gun, user, SEA) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
 
-  user
-    .get(Key.OUTGOINGS)
-    .get(outgoingKey)
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+  const outgoing = user.get(Key.OUTGOINGS).get(outgoingKey);
+
+  /** @type {string} */
+  const encryptedForMeRecipientPublicKey = await new Promise((res, rej) => {
+    outgoing.get("with").once(erpk => {
+      if (typeof erpk !== "string") {
+        rej(new TypeError("Expected outgoing.get('with') to be an string."));
+      } else {
+        if (erpk.length === 0) {
+          rej(
+            new TypeError("Expected outgoing.get('with') to be a populated.")
+          );
+        } else {
+          res(erpk);
+        }
+      }
+    });
+  });
+
+  const recipientPublicKey = await SEA.decrypt(
+    encryptedForMeRecipientPublicKey,
+    mySecret
+  );
+
+  /** @type {string} */
+  const recipientEpub = await new Promise((res, rej) => {
+    gun
+      .user(recipientPublicKey)
+      .get("epub")
+      .once(epub => {
+        if (typeof epub !== "string") {
+          rej(new Error("Expected gun.user(pub).get(epub) to be an string."));
+        } else {
+          if (epub.length === 0) {
+            rej(
+              new Error(
+                "Expected gun.user(pub).get(epub) to be a populated string."
+              )
+            );
+          }
+          res(epub);
+        }
+      });
+  });
+
+  const ourSecret = await SEA.secret(recipientEpub, user._.sea);
+
+  outgoing
     .get(Key.MESSAGES)
     .map()
-    .on((data, key) => {
-      if (Schema.isMessage(data)) {
-        cb(data, key);
+    .on(async (msg, key) => {
+      if (!Schema.isMessage(msg)) {
+        console.warn("non message received");
+        return;
       }
+
+      const encryptedBody = msg.body;
+      const decryptedBody =
+        encryptedBody === Actions.INITIAL_MSG
+          ? encryptedBody
+          : await SEA.decrypt(encryptedBody, ourSecret);
+
+      cb(
+        {
+          body: decryptedBody,
+          timestamp: msg.timestamp
+        },
+        key
+      );
     });
 };
 
 /**
  * Maps a sent request ID to the public key of the user it was sent to.
  * @param {(requestToUser: Record<string, string>) => void} cb
- * @param {UserGUNNode=} user Pass only for testing purposes.
- * @returns {void}
+ * @param {UserGUNNode} user Pass only for testing purposes.
+ * @param {ISEA} SEA
+ * @returns {Promise<void>}
  */
-exports.__onSentRequestToUser = (cb, user = userGun) => {
+const __onSentRequestToUser = async (cb, user, SEA) => {
   /** @type {Record<string, string>} */
   const requestToUser = {};
 
@@ -57,21 +122,26 @@ exports.__onSentRequestToUser = (cb, user = userGun) => {
     throw new Error(ErrorCode.NOT_AUTH);
   }
 
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+
   user
     .get(Key.REQUEST_TO_USER)
     .map()
-    .on((userPK, requestKey) => {
-      if (typeof userPK !== "string") {
+    .on(async (encryptedUserPub, encryptedRequestID) => {
+      if (typeof encryptedUserPub !== "string") {
         console.error("got a non string value");
         return;
       }
 
-      if (userPK.length === 0) {
+      if (encryptedUserPub.length === 0) {
         console.error("got an empty string value");
         return;
       }
 
-      requestToUser[requestKey] = userPK;
+      const userPub = await SEA.decrypt(encryptedUserPub, mySecret);
+      const requestID = await SEA.decrypt(encryptedRequestID, mySecret);
+
+      requestToUser[requestID] = userPub;
 
       cb(requestToUser);
     });
@@ -79,28 +149,38 @@ exports.__onSentRequestToUser = (cb, user = userGun) => {
 
 /**
  * @param {(userToOutgoing: Record<string, string>) => void} cb
- * @param {UserGUNNode=} user Pass only for testing purposes.
- * @returns {void}
+ * @param {UserGUNNode} user Pass only for testing purposes.
+ * @param {ISEA} SEA
+ * @returns {Promise<void>}
  */
-exports.__onUserToIncoming = (cb, user = userGun) => {
+const __onUserToIncoming = async (cb, user, SEA) => {
+  if (!user.is) {
+    throw new Error(ErrorCode.NOT_AUTH);
+  }
+
   /** @type {Record<string, string>} */
   const userToOutgoing = {};
+
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
 
   user
     .get(Key.USER_TO_INCOMING)
     .map()
-    .on((data, key) => {
-      if (typeof data !== "string") {
+    .on(async (encryptedIncomingID, encryptedUserPub) => {
+      if (typeof encryptedIncomingID !== "string") {
         console.error("got a non string value");
         return;
       }
 
-      if (data.length === 0) {
+      if (encryptedIncomingID.length === 0) {
         console.error("got an empty string value");
         return;
       }
 
-      userToOutgoing[key] = data;
+      const incomingID = await SEA.decrypt(encryptedIncomingID, mySecret);
+      const userPub = await SEA.decrypt(encryptedUserPub, mySecret);
+
+      userToOutgoing[userPub] = incomingID;
 
       cb(userToOutgoing);
     });
@@ -108,11 +188,11 @@ exports.__onUserToIncoming = (cb, user = userGun) => {
 
 /**
  * @param {(avatar: string|null) => void} cb
- * @param {UserGUNNode=} user Pass only for testing purposes.
+ * @param {UserGUNNode} user Pass only for testing purposes.
  * @throws {Error} If user hasn't been auth.
  * @returns {void}
  */
-exports.onAvatar = (cb, user = userGun) => {
+const onAvatar = (cb, user) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -136,7 +216,7 @@ exports.onAvatar = (cb, user = userGun) => {
  * @param {UserGUNNode} user
  * @returns {void}
  */
-exports.onBlacklist = (cb, user = userGun) => {
+const onBlacklist = (cb, user) => {
   /** @type {string[]} */
   const blacklist = [];
 
@@ -162,10 +242,10 @@ exports.onBlacklist = (cb, user = userGun) => {
 
 /**
  * @param {(currentHandshakeAddress: string|null) => void} cb
- * @param {UserGUNNode=} user
+ * @param {UserGUNNode} user
  * @returns {void}
  */
-exports.onCurrentHandshakeAddress = (cb, user = userGun) => {
+const onCurrentHandshakeAddress = (cb, user) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -189,10 +269,10 @@ exports.onCurrentHandshakeAddress = (cb, user = userGun) => {
 
 /**
  * @param {(currentHandshakeNode: Record<string, HandshakeRequest>|null) => void} cb
- * @param {UserGUNNode=} user Pass only for testing purposes.
+ * @param {UserGUNNode} user Pass only for testing purposes.
  * @returns {void}
  */
-exports.onCurrentHandshakeNode = (cb, user = userGun) => {
+const onCurrentHandshakeNode = (cb, user) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -223,11 +303,11 @@ exports.onCurrentHandshakeNode = (cb, user = userGun) => {
 
 /**
  * @param {(displayName: string|null) => void} cb
- * @param {UserGUNNode=} user Pass only for testing purposes.
+ * @param {UserGUNNode} user Pass only for testing purposes.
  * @throws {Error} If user hasn't been auth.
  * @returns {void}
  */
-exports.onDisplayName = (cb, user = userGun) => {
+const onDisplayName = (cb, user) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -250,30 +330,31 @@ exports.onDisplayName = (cb, user = userGun) => {
  * @param {(messages: Record<string, Message>) => void} cb
  * @param {string} userPK Public key of the user from whom the incoming
  * messages will be obtained.
- * @param {string} outgoingFeedID ID of the outgoing feed from which the
+ * @param {string} incomingFeedID ID of the outgoing feed from which the
  * incoming messages will be obtained.
- * @param {GUNNode=} gun (Pass only for testing purposes)
+ * @param {GUNNode} gun (Pass only for testing purposes)
+ * @param {UserGUNNode} user
+ * @param {ISEA} SEA
  * @returns {void}
  */
-exports.onIncomingMessages = (
-  cb,
-  userPK,
-  outgoingFeedID,
-  gun = origGun
-) => {
-  const user = gun.user(userPK);
+const onIncomingMessages = (cb, userPK, incomingFeedID, gun, user, SEA) => {
+  if (!user.is) {
+    throw new Error(ErrorCode.NOT_AUTH);
+  }
+
+  const otherUser = gun.user(userPK);
 
   /**
    * @type {Record<string, Message>}
    */
   const messages = {};
 
-  user
+  otherUser
     .get(Key.OUTGOINGS)
-    .get(outgoingFeedID)
+    .get(incomingFeedID)
     .get(Key.MESSAGES)
     .map()
-    .on((data, key) => {
+    .on(async (data, key) => {
       if (!Schema.isMessage(data)) {
         console.warn("non-message received");
         return;
@@ -281,7 +362,40 @@ exports.onIncomingMessages = (
 
       const msg = data;
 
-      messages[key] = msg;
+      const encryptedBody = msg.body;
+
+      /** @type {string} */
+      const recipientEpub = await new Promise((res, rej) => {
+        gun
+          .user(userPK)
+          .get("epub")
+          .once(epub => {
+            if (typeof epub !== "string") {
+              rej(
+                new Error("Expected gun.user(pub).get(epub) to be an string.")
+              );
+            } else {
+              if (epub.length === 0) {
+                rej(
+                  new Error(
+                    "Expected gun.user(pub).get(epub) to be a populated string."
+                  )
+                );
+              }
+              res(epub);
+            }
+          });
+      });
+
+      const secret = await SEA.secret(recipientEpub, user._.sea);
+
+      messages[key] = {
+        body:
+          encryptedBody === Actions.INITIAL_MSG
+            ? Actions.INITIAL_MSG
+            : await SEA.decrypt(encryptedBody, secret),
+        timestamp: msg.timestamp
+      };
 
       cb(messages);
     });
@@ -290,17 +404,23 @@ exports.onIncomingMessages = (
 /**
  *
  * @param {(outgoings: Record<string, Outgoing>) => void} cb
+ * @param {GUNNode} gun
  * @param {UserGUNNode} user
+ * @param {ISEA} SEA
  * @param {typeof __onOutgoingMessage} onOutgoingMessage
  */
-exports.onOutgoing = (
+const onOutgoing = async (
   cb,
-  user = userGun,
+  gun,
+  user,
+  SEA,
   onOutgoingMessage = __onOutgoingMessage
 ) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
+
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
 
   /**
    * @type {Record<string, Outgoing>}
@@ -316,16 +436,21 @@ exports.onOutgoing = (
 
   u.get(Key.OUTGOINGS)
     .map()
-    .on((data, key) => {
+    .on(async (data, key) => {
       if (!Schema.isPartialOutgoing(data)) {
         console.warn("not partial outgoing");
         console.warn(JSON.stringify(data));
         return;
       }
 
+      const decryptedRecipientPublicKey = await SEA.decrypt(
+        data.with,
+        mySecret
+      );
+
       outgoings[key] = {
         messages: outgoings[key] ? outgoings[key].messages : {},
-        with: data.with
+        with: decryptedRecipientPublicKey
       };
 
       if (!outgoingsWithMessageListeners.includes(key)) {
@@ -341,7 +466,9 @@ exports.onOutgoing = (
 
             cb(outgoings);
           },
-          user
+          gun,
+          user,
+          SEA
         );
       }
 
@@ -351,10 +478,10 @@ exports.onOutgoing = (
 
 /**
  * @param {(sentRequests: Record<string, HandshakeRequest>) => void} cb
- * @param {UserGUNNode=} user Pass only for testing purposes.
+ * @param {UserGUNNode} user Pass only for testing purposes.
  * @returns {void}
  */
-exports.onSentRequests = (cb, user = userGun) => {
+const onSentRequests = (cb, user) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -386,9 +513,10 @@ exports.onSentRequests = (cb, user = userGun) => {
  * @param {(chats: Chat[]) => void} cb
  * @param {GUNNode} gun
  * @param {UserGUNNode} user
+ * @param {ISEA} SEA
  * @returns {void}
  */
-exports.onChats = (cb, gun = origGun, user = userGun) => {
+const onChats = (cb, gun, user, SEA) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -435,106 +563,117 @@ exports.onChats = (cb, gun = origGun, user = userGun) => {
 
   callCB();
 
-  onOutgoing(outgoings => {
-    for (const outgoing of Object.values(outgoings)) {
-      const recipientPK = outgoing.with;
+  onOutgoing(
+    outgoings => {
+      for (const outgoing of Object.values(outgoings)) {
+        const recipientPK = outgoing.with;
 
-      if (!recipientPKToChat[recipientPK]) {
-        recipientPKToChat[recipientPK] = {
-          messages: [],
-          recipientAvatar: "",
-          recipientDisplayName: recipientPK,
-          recipientPublicKey: recipientPK
-        };
-      }
+        if (!recipientPKToChat[recipientPK]) {
+          recipientPKToChat[recipientPK] = {
+            messages: [],
+            recipientAvatar: "",
+            recipientDisplayName: recipientPK,
+            recipientPublicKey: recipientPK
+          };
+        }
 
-      const messages = recipientPKToChat[recipientPK].messages;
+        const messages = recipientPKToChat[recipientPK].messages;
 
-      for (const [msgK, msg] of Object.entries(outgoing.messages)) {
-        if (!messages.find(m => m.id === msgK)) {
-          messages.push({
-            body: msg.body,
-            id: msgK,
-            outgoing: true,
-            timestamp: msg.timestamp
-          });
+        for (const [msgK, msg] of Object.entries(outgoing.messages)) {
+          if (!messages.find(m => m.id === msgK)) {
+            messages.push({
+              body: msg.body,
+              id: msgK,
+              outgoing: true,
+              timestamp: msg.timestamp
+            });
+          }
         }
       }
-    }
 
-    callCB();
-  }, user);
+      callCB();
+    },
+    gun,
+    user,
+    SEA
+  );
 
-  __onUserToIncoming(uti => {
-    for (const [recipientPK, incomingFeedID] of Object.entries(uti)) {
-      if (!recipientPKToChat[recipientPK]) {
-        recipientPKToChat[recipientPK] = {
-          messages: [],
-          recipientAvatar: "",
-          recipientDisplayName: recipientPK,
-          recipientPublicKey: recipientPK
-        };
-      }
+  __onUserToIncoming(
+    uti => {
+      for (const [recipientPK, incomingFeedID] of Object.entries(uti)) {
+        if (!recipientPKToChat[recipientPK]) {
+          recipientPKToChat[recipientPK] = {
+            messages: [],
+            recipientAvatar: "",
+            recipientDisplayName: recipientPK,
+            recipientPublicKey: recipientPK
+          };
+        }
 
-      const chat = recipientPKToChat[recipientPK];
+        const chat = recipientPKToChat[recipientPK];
 
-      if (!usersWithIncomingListeners.includes(recipientPK)) {
-        usersWithIncomingListeners.push(recipientPK);
+        if (!usersWithIncomingListeners.includes(recipientPK)) {
+          usersWithIncomingListeners.push(recipientPK);
 
-        onIncomingMessages(
-          msgs => {
-            for (const [msgK, msg] of Object.entries(msgs)) {
-              const messages = chat.messages;
+          onIncomingMessages(
+            msgs => {
+              for (const [msgK, msg] of Object.entries(msgs)) {
+                const messages = chat.messages;
 
-              if (!messages.find(m => m.id === msgK)) {
-                messages.push({
-                  body: msg.body,
-                  id: msgK,
-                  outgoing: false,
-                  timestamp: msg.timestamp
-                });
+                if (!messages.find(m => m.id === msgK)) {
+                  messages.push({
+                    body: msg.body,
+                    id: msgK,
+                    outgoing: false,
+                    timestamp: msg.timestamp
+                  });
+                }
               }
-            }
 
-            callCB();
-          },
-          recipientPK,
-          incomingFeedID,
+              callCB();
+            },
+            recipientPK,
+            incomingFeedID,
+            gun,
+            user,
+            SEA
+          );
+        }
+
+        if (!usersWithAvatarListeners.includes(recipientPK)) {
+          usersWithAvatarListeners.push(recipientPK);
+
           gun
-        );
+            .user(recipientPK)
+            .get(Key.PROFILE)
+            .get(Key.AVATAR)
+            .on(avatar => {
+              if (typeof avatar === "string") {
+                chat.recipientAvatar = avatar;
+                callCB();
+              }
+            });
+        }
+
+        if (!usersWithDisplayNameListeners.includes(recipientPK)) {
+          usersWithDisplayNameListeners.push(recipientPK);
+
+          gun
+            .user(recipientPK)
+            .get(Key.PROFILE)
+            .get(Key.DISPLAY_NAME)
+            .on(displayName => {
+              if (typeof displayName === "string") {
+                chat.recipientDisplayName = displayName;
+                callCB();
+              }
+            });
+        }
       }
-
-      if (!usersWithAvatarListeners.includes(recipientPK)) {
-        usersWithAvatarListeners.push(recipientPK);
-
-        gun
-          .user(recipientPK)
-          .get(Key.PROFILE)
-          .get(Key.AVATAR)
-          .on(avatar => {
-            if (typeof avatar === "string") {
-              chat.recipientAvatar = avatar;
-              callCB();
-            }
-          });
-      }
-
-      if (!usersWithDisplayNameListeners.includes(recipientPK)) {
-        usersWithDisplayNameListeners.push(recipientPK);
-
-        gun
-          .user(recipientPK)
-          .get(Key.PROFILE)
-          .get(Key.DISPLAY_NAME)
-          .on(displayName => {
-            if (typeof displayName === "string") {
-              chat.recipientDisplayName = displayName;
-              callCB();
-            }
-          });
-      }
-    }
-  }, user);
+    },
+    user,
+    SEA
+  );
 };
 
 /**
@@ -542,13 +681,10 @@ exports.onChats = (cb, gun = origGun, user = userGun) => {
  * @param {(simpleReceivedRequests: SimpleReceivedRequest[]) => void} cb
  * @param {GUNNode} gun
  * @param {UserGUNNode} user
+ * @param {ISEA} SEA
  * @returns {void}
  */
-exports.onSimplerReceivedRequests = (
-  cb,
-  gun = origGun,
-  user = userGun
-) => {
+const onSimplerReceivedRequests = (cb, gun, user, SEA) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -568,7 +704,15 @@ exports.onSimplerReceivedRequests = (
   user
     .get(Key.USER_TO_INCOMING)
     .map()
-    .on((_, userPK) => {
+    .on(async (_, encryptedUserPK) => {
+      if (!user.is) {
+        console.warn("!user.is");
+        return;
+      }
+
+      const secret = await SEA.secret(user.is.pub, user._.sea);
+      const userPK = await SEA.decrypt(encryptedUserPK, secret);
+
       requestorsAlreadyAccepted.add(userPK);
     });
 
@@ -595,11 +739,24 @@ exports.onSimplerReceivedRequests = (
   user
     .get(Key.CURRENT_HANDSHAKE_NODE)
     .map()
-    .on((req, reqID) => {
+    .on(async (req, reqID) => {
       if (!Schema.isHandshakeRequest(req)) {
         console.warn(`non request received: ${JSON.stringify(req)}`);
         return;
       }
+
+      const requestorEpub = await new Promise(res =>
+        gun
+          .user(req.from)
+          .get("epub")
+          .once(res)
+      );
+
+      const ourSecret = await SEA.secret(requestorEpub, user._.sea);
+      const decryptedResponse = await SEA.decrypt(req.response, ourSecret);
+
+      console.log(`encryptedResponse: ${req.response}`);
+      console.log(`decryptedResponse: ${decryptedResponse}`);
 
       if (!idToReceivedRequest[reqID]) {
         idToReceivedRequest[reqID] = {
@@ -607,7 +764,7 @@ exports.onSimplerReceivedRequests = (
           requestorAvatar: "",
           requestorDisplayName: "",
           requestorPK: req.from,
-          response: req.response,
+          response: decryptedResponse,
           timestamp: req.timestamp
         };
       }
@@ -660,9 +817,10 @@ exports.onSimplerReceivedRequests = (
  * @param {(sentRequests: SimpleSentRequest[]) => void} cb
  * @param {GUNNode} gun
  * @param {UserGUNNode} user
+ * @param {ISEA} SEA
  * @returns {void}
  */
-exports.onSimplerSentRequests = (cb, gun = origGun, user = userGun) => {
+const onSimplerSentRequests = (cb, gun, user, SEA) => {
   /**
    * @type {Record<string, Omit<SimpleSentRequest, 'timestamp'> & { timestamp?: undefined|number}>}
    **/
@@ -722,103 +880,131 @@ exports.onSimplerSentRequests = (cb, gun = origGun, user = userGun) => {
   user
     .get(Key.USER_TO_INCOMING)
     .map()
-    .on((_, userPK) => {
+    .on(async (_, encryptedUserPK) => {
+      if (!user.is) {
+        console.warn("!user.is");
+        return;
+      }
+
+      const secret = await SEA.secret(user.is.pub, user._.sea);
+      const userPK = await SEA.decrypt(encryptedUserPK, secret);
+
       recipientsThatHaveAcceptedRequest.add(userPK);
 
       callCB();
     });
 
-  __onSentRequestToUser(srtu => {
-    for (const [sentRequestID, recipientPK] of Object.entries(srtu)) {
-      if (!idToPartialSimpleSentRequest[sentRequestID]) {
-        idToPartialSimpleSentRequest[sentRequestID] = {
-          id: sentRequestID,
-          recipientAvatar: "",
-          recipientChangedRequestAddress: false,
-          recipientDisplayName: "",
-          recipientPublicKey: recipientPK
-        };
+  __onSentRequestToUser(
+    srtu => {
+      for (const [sentRequestID, recipientPK] of Object.entries(srtu)) {
+        if (!idToPartialSimpleSentRequest[sentRequestID]) {
+          idToPartialSimpleSentRequest[sentRequestID] = {
+            id: sentRequestID,
+            recipientAvatar: "",
+            recipientChangedRequestAddress: false,
+            recipientDisplayName: "",
+            recipientPublicKey: recipientPK
+          };
+        }
+
+        if (!recipientsWithAvatarListener.includes(recipientPK)) {
+          recipientsWithAvatarListener.push(recipientPK);
+
+          gun
+            .user(recipientPK)
+            .get(Key.PROFILE)
+            .get(Key.AVATAR)
+            .on(avatar => {
+              if (typeof avatar === "string") {
+                idToPartialSimpleSentRequest[
+                  sentRequestID
+                ].recipientAvatar = avatar;
+
+                callCB();
+              }
+            });
+        }
+
+        if (!recipientsWithDisplayNameListener.includes(recipientPK)) {
+          recipientsWithDisplayNameListener.push(recipientPK);
+
+          gun
+            .user(recipientPK)
+            .get(Key.PROFILE)
+            .get(Key.DISPLAY_NAME)
+            .on(displayName => {
+              if (typeof displayName === "string") {
+                idToPartialSimpleSentRequest[
+                  sentRequestID
+                ].recipientDisplayName = displayName;
+
+                callCB();
+              }
+            });
+        }
+
+        if (!recipientsWithCurrentHandshakeNodeListener.includes(recipientPK)) {
+          recipientsWithCurrentHandshakeNodeListener.push(recipientPK);
+
+          gun
+            .user(recipientPK)
+            .get(Key.CURRENT_HANDSHAKE_NODE)
+            .on(() => {
+              gun
+                .user(recipientPK)
+                .get(Key.CURRENT_HANDSHAKE_NODE)
+                .get(sentRequestID)
+                .once(data => {
+                  if (typeof data === "undefined") {
+                    idToPartialSimpleSentRequest[
+                      sentRequestID
+                    ].recipientChangedRequestAddress = true;
+
+                    callCB();
+                  }
+                });
+            });
+        }
+
+        if (
+          typeof idToPartialSimpleSentRequest[sentRequestID].timestamp ===
+          "undefined"
+        ) {
+          user
+            .get(Key.SENT_REQUESTS)
+            .get(sentRequestID)
+            .once(sr => {
+              if (Schema.isHandshakeRequest(sr)) {
+                idToPartialSimpleSentRequest[sentRequestID].timestamp =
+                  sr.timestamp;
+
+                callCB();
+              } else {
+                console.warn("non handshake request received");
+              }
+            });
+        }
       }
 
-      if (!recipientsWithAvatarListener.includes(recipientPK)) {
-        recipientsWithAvatarListener.push(recipientPK);
+      callCB();
+    },
+    user,
+    SEA
+  );
+};
 
-        gun
-          .user(recipientPK)
-          .get(Key.PROFILE)
-          .get(Key.AVATAR)
-          .on(avatar => {
-            if (typeof avatar === "string") {
-              idToPartialSimpleSentRequest[
-                sentRequestID
-              ].recipientAvatar = avatar;
-
-              callCB();
-            }
-          });
-      }
-
-      if (!recipientsWithDisplayNameListener.includes(recipientPK)) {
-        recipientsWithDisplayNameListener.push(recipientPK);
-
-        gun
-          .user(recipientPK)
-          .get(Key.PROFILE)
-          .get(Key.DISPLAY_NAME)
-          .on(displayName => {
-            if (typeof displayName === "string") {
-              idToPartialSimpleSentRequest[
-                sentRequestID
-              ].recipientDisplayName = displayName;
-
-              callCB();
-            }
-          });
-      }
-
-      if (!recipientsWithCurrentHandshakeNodeListener.includes(recipientPK)) {
-        recipientsWithCurrentHandshakeNodeListener.push(recipientPK);
-
-        gun
-          .user(recipientPK)
-          .get(Key.CURRENT_HANDSHAKE_NODE)
-          .on(() => {
-            gun
-              .user(recipientPK)
-              .get(Key.CURRENT_HANDSHAKE_NODE)
-              .get(sentRequestID)
-              .once(data => {
-                if (typeof data === "undefined") {
-                  idToPartialSimpleSentRequest[
-                    sentRequestID
-                  ].recipientChangedRequestAddress = true;
-
-                  callCB();
-                }
-              });
-          });
-      }
-
-      if (
-        typeof idToPartialSimpleSentRequest[sentRequestID].timestamp ===
-        "undefined"
-      ) {
-        user
-          .get(Key.SENT_REQUESTS)
-          .get(sentRequestID)
-          .once(sr => {
-            if (Schema.isHandshakeRequest(sr)) {
-              idToPartialSimpleSentRequest[sentRequestID].timestamp =
-                sr.timestamp;
-
-              callCB();
-            } else {
-              console.warn("non handshake request received");
-            }
-          });
-      }
-    }
-
-    callCB();
-  }, user);
+module.exports = {
+  __onSentRequestToUser,
+  __onUserToIncoming,
+  onAvatar,
+  onBlacklist,
+  onCurrentHandshakeAddress,
+  onCurrentHandshakeNode,
+  onDisplayName,
+  onIncomingMessages,
+  onOutgoing,
+  onSentRequests,
+  onChats,
+  onSimplerReceivedRequests,
+  onSimplerSentRequests
 };

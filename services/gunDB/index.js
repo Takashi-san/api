@@ -20,7 +20,7 @@ http.listen(3000, function() {
  * @param {import('socket.io').Socket} socket
  */
 const onConnection = socket => {
-  new Mediator(socket);
+  Mediator.createMediator(socket);
 };
 
 io.on("connection", onConnection);

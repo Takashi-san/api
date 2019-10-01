@@ -13,10 +13,10 @@
 const ErrorCode = require("./errorCode");
 const Events = require("./events");
 const Key = require("./key");
-const { user: userGun } = require("./gun");
 
 /**
  * @typedef {import('./SimpleGUN').GUNNode} GUNNode
+ * @typedef {import('./SimpleGUN').ISEA} ISEA
  * @typedef {import('./schema').HandshakeRequest} HandshakeRequest
  * @typedef {import('./SimpleGUN').UserGUNNode} UserGUNNode
  */
@@ -29,61 +29,142 @@ const { user: userGun } = require("./gun");
  * @param {((osr: OnSentRequest, user: UserGUNNode) => void)=} onSentRequestsFactory
  * Pass only for testing purposes.
  * @throws {Error} NOT_AUTH
- * @param {UserGUNNode=} user Pass only for testing purposes.
+ * @param {GUNNode} gun
+ * @param {UserGUNNode} user Pass only for testing purposes.
+ * @param {ISEA} SEA
+ * @returns {Promise<void>}
  */
-exports.onAcceptedRequests = (
+exports.onAcceptedRequests = async (
   onSentRequestsFactory = Events.onSentRequests,
-  user = userGun
+  gun,
+  user,
+  SEA
 ) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
 
-  onSentRequestsFactory(sentRequests => {
+  // Used only for decrypting request-to-user-map
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+
+  onSentRequestsFactory(async sentRequests => {
     for (const [reqKey, req] of Object.entries(sentRequests)) {
-      // TODO: check here if the response of the handshake request has been
-      // overwritten by the recipient.
-      if (req.response.indexOf("$$_TEST_") === 0) {
-        user
-          .get(Key.REQUEST_TO_USER)
-          .get(reqKey)
-          .once(userPubKey => {
-            if (typeof userPubKey !== "string") {
-              if (typeof userPubKey !== "undefined") {
-                console.error("non string received");
-              }
-              return;
-            }
+      try {
+        const encryptedForMeRequestID = await SEA.encrypt(reqKey, mySecret);
 
-            if (userPubKey.length === 0) {
-              console.error("empty string received");
-              return;
-            }
-
-            const userToIncoming = user.get(Key.USER_TO_INCOMING);
-
-            userToIncoming.get(userPubKey).once(outgoingID => {
-              const receivedOutgoingID = req.response;
-
-              // only set it once. Also prevents attacks if an attacker
-              // modifies old requests
-              if (typeof outgoingID === "undefined") {
-                userToIncoming.get(userPubKey).put(receivedOutgoingID);
-
+        /** @type {string|undefined} */
+        const encryptedForMeRecipientPub = await new Promise((res, rej) => {
+          user
+            .get(Key.REQUEST_TO_USER)
+            .get(encryptedForMeRequestID)
+            .once(userPub => {
+              if (typeof userPub === "undefined") {
+                res(undefined);
                 return;
               }
 
-              if (typeof outgoingID !== "string") {
-                console.error("non string received");
+              if (typeof userPub !== "string") {
+                rej(
+                  new TypeError(
+                    "typeof userPub !== 'string' && typeof userPub !== 'undefined'"
+                  )
+                );
                 return;
               }
 
-              if (outgoingID.length === 0) {
-                console.error("empty string received");
+              if (userPub.length === 0) {
+                rej(new TypeError("userPub.length === 0"));
                 return;
+              }
+
+              res(userPub);
+            });
+        });
+
+        if (typeof encryptedForMeRecipientPub === "undefined") {
+          throw new TypeError(
+            "typeof encryptedForMeRecipientPub === 'undefined'"
+          );
+        }
+
+        const recipientPub = await SEA.decrypt(
+          encryptedForMeRecipientPub,
+          mySecret
+        );
+
+        /** @type {string} */
+        const recipientEpub = await new Promise((res, rej) => {
+          gun
+            .user(recipientPub)
+            .get("epub")
+            .once(epub => {
+              if (typeof epub !== "string") {
+                rej(
+                  new TypeError(
+                    "Expected gun.user(pub).get(epub) to be an string."
+                  )
+                );
+              } else {
+                if (epub.length === 0) {
+                  rej(
+                    new TypeError(
+                      "Expected gun.user(pub).get(epub) to be a populated string."
+                    )
+                  );
+                }
+
+                res(epub);
               }
             });
-          });
+        });
+
+        // The response can be decrypted with the same secret regardless of who
+        // wrote to it last (see HandshakeRequest definition).
+        const ourSecret = await SEA.secret(recipientEpub, user._.sea);
+
+        // This could be our feed ID for the recipient, or the recipient's feed
+        // id if he accepted the request.
+        const feedID = await SEA.decrypt(req.response, ourSecret);
+
+        // Check that this feed exists on the recipient's outgoing feeds
+        const wasAccepted = await new Promise(res => {
+          gun
+            .user(recipientPub)
+            .get(Key.OUTGOINGS)
+            .get(feedID)
+            .once(feed => {
+              res(typeof feed !== "undefined");
+            });
+        });
+
+        if (!wasAccepted) {
+          return;
+        }
+
+        const alreadyExists = await new Promise(res => {
+          user
+            .get(Key.USER_TO_INCOMING)
+            .get(encryptedForMeRecipientPub)
+            .once(feedIDRecord => {
+              res(typeof feedIDRecord !== "undefined");
+            });
+        });
+
+        // only set it once. Also prevents attacks if an attacker
+        // modifies old requests
+        if (alreadyExists) {
+          return;
+        }
+
+        const encryptedForMeIncomingID = await SEA.encrypt(feedID, mySecret);
+
+        user
+          .get(Key.USER_TO_INCOMING)
+          .get(encryptedForMeRecipientPub)
+          .put(encryptedForMeIncomingID);
+      } catch (e) {
+        console.error(`Error inside Jobs.onAcceptedRequests: ${e.message}`);
+        console.log(e);
       }
     }
   }, user);

@@ -1,3 +1,4 @@
+// @ts-nocheck
 const jwt = require('jsonwebtoken');
 const uuidv1 = require('uuid/v1');
 const jsonfile = require('jsonfile');

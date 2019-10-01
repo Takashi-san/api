@@ -139,7 +139,8 @@ module.exports = function(
     // this is where we create the websocket connection
     // with the GunDB service.
 
-    new Mediator(socket);
+    Mediator.createMediator(socket);
+
 
     let lnServices;
     if (fs.existsSync(lnServicesData.macaroonPath)) {

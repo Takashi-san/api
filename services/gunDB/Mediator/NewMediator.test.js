@@ -6,7 +6,7 @@ const ioBack = require("socket.io");
 let socket;
 /** @type {ReturnType<typeof http.createServer>} */
 let httpServer;
-/** @type {string} */
+/** @type {import('net').AddressInfo} */
 let httpServerAddr;
 /** @type {ReturnType<ioBack>} */
 let ioServer;
@@ -40,9 +40,8 @@ beforeEach(done => {
   socket = io.connect(
     `http://[${httpServerAddr.address}]:${httpServerAddr.port}`,
     {
-      "reconnection delay": 0,
-      "reopen delay": 0,
-      "force new connection": true,
+      reconnectionDelay: 0,
+      forceNew: true,
       transports: ["websocket"]
     }
   );
@@ -66,7 +65,7 @@ describe("basic socket.io example", () => {
   test("should communicate", done => {
     // once connected, emit Hello World
     ioServer.emit("echo", "Hello World");
-    socket.once("echo", message => {
+    socket.once("echo", (/** @type {string} */ message) => {
       // Check that the message matches
       expect(message).toBe("Hello World");
       done();

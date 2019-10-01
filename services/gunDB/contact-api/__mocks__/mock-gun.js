@@ -2,7 +2,9 @@
  * @prettier
  */
 /**
+ * @typedef {import('../SimpleGUN').AuthCB} AuthCB
  * @typedef {import('../SimpleGUN').Callback} Callback
+ * @typedef {import('../SimpleGUN').CreateCB} CreateCB
  * @typedef {import('../SimpleGUN').Data} Data
  * @typedef {import('../SimpleGUN').GUNNode} GUNNode
  * @typedef {import('../SimpleGUN').Listener} Listener
@@ -44,7 +46,9 @@ const isObject = o => typeof o === "object" && o !== null;
 const graphIsObject = graph => typeof graph === "object" && graph !== null;
 
 /**
- *
+ * Checks that data is a valid data value. That is, it checks that data is
+ * either a primitive (number, string, boolean, null) or an object but not
+ * undefined, a set, an array, function, etc.
  * @param {any} data
  * @returns {data is ValidDataValue}
  */
@@ -88,26 +92,6 @@ const isValidGunData = data => {
   return true;
 };
 
-/**
- * @param {any} o
- * @returns {o is GUNNode}
- */
-const isGunNode = o => {
-  if (!isObject(o)) {
-    return false;
-  }
-
-  if (typeof o.get !== "function") {
-    return false;
-  }
-
-  if (typeof o.on !== "function") {
-    return false;
-  }
-
-  return true;
-};
-
 export default class MockGun {
   /**
    * When set() as successfullly been called on this node, or when map() has
@@ -119,9 +103,10 @@ export default class MockGun {
   nodeType = "undefined";
 
   /**
+   * @private
    * @type {Graph}
    */
-  graph = undefined;
+  _graph = undefined;
 
   /**
    * @type {Listener[]}
@@ -132,6 +117,8 @@ export default class MockGun {
    * @type {Listener[]}
    */
   setListeners = [];
+
+  isAuth = false;
 
   /**
    * @param {Options} opts
@@ -160,14 +147,10 @@ export default class MockGun {
       throw new Error("isAuth is meant to be used on root nodes only");
     }
 
+    this.isAuth = !!isAuth;
+
     this.failUserAuth = failUserAuth;
     this.failUserCreation = failUserCreation;
-
-    this.is = isAuth
-      ? {
-          pub: Math.random().toString()
-        }
-      : undefined;
 
     if (Array.isArray(initialData)) {
       for (const item of initialData) {
@@ -191,7 +174,7 @@ export default class MockGun {
     //https://github.com/Microsoft/TypeScript/issues/17498#issuecomment-399439654
     /**
      * Assert that this class correctly implements UserGUNNode.
-     * @type {UserGUNNode}
+     * @type {GUNNode}
      */
     const instance = this;
     instance;
@@ -207,8 +190,51 @@ export default class MockGun {
         typeof this.graph === "object" && this.graph !== null
           ? { "#": this.key }
           : this.graph,
-      sea: this.is ? Math.random().toString() : undefined
+      sea: this.is
+        ? {
+            epriv: this.is.pub,
+            epub: this.is.pub,
+            priv: this.is.pub,
+            pub: this.is.pub
+          }
+        : {
+            epriv: Math.random().toString(),
+            epub: Math.random().toString(),
+            priv: Math.random().toString(),
+            pub: Math.random().toString()
+          }
     };
+  }
+
+  /**
+   * @returns {Graph}
+   */
+  get graph() {
+    // return this._graph;
+    if (
+      typeof this._graph === "object" &&
+      this._graph !== null &&
+      !(this._graph instanceof MockGun)
+    ) {
+      for (const [k, v] of Object.entries(this._graph)) {
+        if (typeof v === "undefined") {
+          delete this._graph[k];
+        }
+
+        if (v instanceof MockGun && typeof v._graph === "undefined") {
+          delete this._graph[k];
+        }
+      }
+    }
+
+    return this._graph;
+  }
+
+  /**
+   * @param {Graph} g
+   */
+  set graph(g) {
+    this._graph = g;
   }
 
   _notifyListeners() {
@@ -358,7 +384,7 @@ export default class MockGun {
       };
 
       for (const [k, v] of Object.entries(graph)) {
-        if (isGunNode(v)) {
+        if (v instanceof MockGun) {
           const gunNodeSoul = v._.get;
 
           if (typeof gunNodeSoul !== "string") {
@@ -382,14 +408,17 @@ export default class MockGun {
   /**
    * @param {string} _
    * @param {string} __
-   * @param {Callback=} cb
+   * @param {AuthCB=} cb
    * @returns {void}
    */
   auth(_, __, cb) {
     if (this.failUserAuth) {
       cb &&
         cb({
-          err: "Failed authentication mock."
+          err: "Failed authentication mock.",
+          sea: {
+            pub: Math.random().toString()
+          }
         });
     } else {
       this.is = {
@@ -398,7 +427,8 @@ export default class MockGun {
 
       cb &&
         cb({
-          err: undefined
+          err: undefined,
+          sea: undefined
         });
     }
   }
@@ -406,19 +436,21 @@ export default class MockGun {
   /**
    * @param {string} _
    * @param {string} __
-   * @param {Callback=} cb
+   * @param {CreateCB=} cb
    * @returns {void}
    */
   create(_, __, cb) {
     if (this.failUserCreation) {
       cb &&
         cb({
-          err: "Failed user creation mock."
+          err: "Failed user creation mock.",
+          pub: Math.random().toString()
         });
     } else {
       cb &&
         cb({
-          err: undefined
+          err: undefined,
+          pub: Math.random().toString()
         });
     }
   }
@@ -430,6 +462,12 @@ export default class MockGun {
   get(key) {
     if (typeof key !== "string") {
       throw new TypeError();
+    }
+
+    if (this.is && key === "epub") {
+      return /** @type {GUNNode} */ (new MockGun({
+        initialData: this.is.pub
+      }));
     }
 
     if (
@@ -452,7 +490,7 @@ export default class MockGun {
     const subGraph = this.graph[key];
 
     if (subGraph instanceof MockGun) {
-      return subGraph;
+      return /** @type {GUNNode} */ (subGraph);
     } else {
       // accessing a non existing key must belong to leaf behaviour
       this.nodeType = "leaf";
@@ -470,7 +508,7 @@ export default class MockGun {
 
       this.graph[key] = newNode;
 
-      return newNode;
+      return /** @type {GUNNode} */ (newNode);
     }
   }
 
@@ -580,10 +618,6 @@ export default class MockGun {
       // this behaviour conforms to this node being used as a set
       this.nodeType === "set";
 
-      // we ignore the typings, let other code fail/crash if it tries to access
-      // missing functions which shouldn't actually been accessed when using the
-      // return value of once() without a callback on our app
-      // @ts-ignore
       return {
         // @ts-ignore
         map: () => {
@@ -610,7 +644,7 @@ export default class MockGun {
   }
 
   /**
-   * @param {ValidDataValue|MockGun} newData
+   * @param {ValidDataValue|GUNNode} newData
    * @param {(Callback|undefined)=} cb
    * @returns {void}
    */
@@ -626,11 +660,10 @@ export default class MockGun {
       throw new Error("Tried to put to a set node");
     }
 
-    const isUserNode = typeof this.is !== "undefined";
     const isChildOfRoot = this.isChildOfRoot;
 
     if (newData instanceof MockGun) {
-      if (!isUserNode && isChildOfRoot) {
+      if (isChildOfRoot) {
         throw new Error(`Error: Invalid graph!`);
       }
 
@@ -701,7 +734,7 @@ export default class MockGun {
       for (const [k, subData] of Object.entries(data)) {
         const subGraph = graph[k];
 
-        if (isGunNode(subGraph)) {
+        if (subGraph instanceof MockGun) {
           subGraph.put(subData, ack => {
             if (ack.err) {
               console.error(ack);
@@ -738,7 +771,7 @@ export default class MockGun {
         }
       }
     } else {
-      if (!isUserNode && isChildOfRoot) {
+      if (isChildOfRoot) {
         throw new Error(
           `Data saved to the root level of the graph must be a node (an object), not a ${typeof newData} of "${newData}"!`
         );
@@ -757,7 +790,7 @@ export default class MockGun {
   }
 
   /**
-   * @param {ValidDataValue|MockGun} newItem
+   * @param {ValidDataValue|GUNNode} newItem
    * @param {Callback=} cb
    * @returns {GUNNode}
    */
@@ -817,22 +850,177 @@ export default class MockGun {
         cb && cb({ err: undefined });
       });
 
-      return newSubNode;
+      return /** @type {GUNNode} */ (newSubNode);
     } else {
       console.warn("Tried to call set() on a primitive-graph node");
+      // @ts-ignore
+      return null;
     }
   }
 
   /**
+   * @param {string=} publicKey
    * @returns {UserGUNNode}
    */
-  user() {
-    return this;
+  user(publicKey) {
+    if (publicKey) {
+      // @ts-ignore
+      const node = /** @type {MockGun} */ (this.get(
+        "$$_MOCK_USER_SUPER_NODE"
+      ).get(publicKey));
+
+      if (node.graph instanceof MockGun) {
+        throw new TypeError("node.graph instanceof MockGun");
+      }
+
+      if (
+        (typeof node.graph !== "object" && typeof node.graph !== "undefined") ||
+        node.graph === null
+      ) {
+        throw new TypeError(
+          `(typeof node.graph !== "object" && typeof node.graph !== 'undefined')|| node.graph === null`
+        );
+      }
+
+      node.graph = {
+        ...node.graph,
+        epub: publicKey
+      };
+
+      return /** @type {UserGUNNode} */ (node);
+    }
+
+    /** @type {null|string} */
+    let storedPublicKey = this.isAuth ? Math.random().toString() : null;
+
+    /** @type {UserGUNNode} */
+    const surrogate = {
+      get _() {
+        if (storedPublicKey === null) {
+          console.warn(
+            "Tried to access _ without authenticating first. This warning might pop up if accesing it for auth/leave/create reasons."
+          );
+
+          // @ts-ignore Actual gun Behaviour, different from our typings
+          return /** @type {UserSoul} */ ({
+            get: undefined,
+            sea: undefined,
+            put: undefined
+          });
+        }
+
+        return {
+          get: undefined,
+          sea: {
+            epriv: storedPublicKey,
+            epub: storedPublicKey,
+            priv: storedPublicKey,
+            pub: storedPublicKey
+          },
+          put: undefined
+        };
+      },
+
+      auth: (alias, _, cb, fail = false) => {
+        if (fail) {
+          cb({ err: "failAuth() called", sea: undefined });
+        } else {
+          storedPublicKey = alias;
+
+          this.get("$$_MOCK_USER_SUPER_NODE")
+            .get(storedPublicKey)
+            .get("epub")
+            .put(storedPublicKey, ack => {
+              if (ack.err) {
+                cb({
+                  err: `Error setting epub: ${ack.err}`,
+                  sea: undefined
+                });
+              } else {
+                cb({
+                  err: undefined,
+                  sea: {
+                    pub: /** @type {string} */ (storedPublicKey)
+                  }
+                });
+              }
+            });
+
+          cb({
+            err: undefined,
+            sea: {
+              pub: /** @type {string} */ (storedPublicKey)
+            }
+          });
+        }
+      },
+
+      create: (_, __, cb, fail = false) => {
+        if (fail) {
+          cb({ err: "failCreate() called", pub: undefined });
+        } else {
+          cb({ err: undefined, pub: Math.random().toString() });
+        }
+      },
+
+      get: key => {
+        if (storedPublicKey === null) {
+          throw new Error("Tried to call get() without authenticating first.");
+        }
+
+        return this.get("$$_MOCK_USER_SUPER_NODE")
+          .get(storedPublicKey)
+          .get(key);
+      },
+
+      get is() {
+        if (storedPublicKey) {
+          return {
+            pub: storedPublicKey
+          };
+        }
+
+        return undefined;
+      },
+
+      leave() {
+        storedPublicKey = null;
+      },
+
+      map() {
+        throw new Error("Shouldn't call map() directly on user node.");
+      },
+
+      off() {
+        throw new Error("Shouldn't call off() directly on user node.");
+      },
+
+      on() {
+        throw new Error("Shouldn't call on() directly on user node.");
+      },
+
+      once() {
+        throw new Error("Shouldn't call once() directly on user node.");
+      },
+
+      put() {
+        throw new Error("Shouldn't call put() directly on user node.");
+      },
+
+      set() {
+        throw new Error("Shouldn't call off() directly on user node.");
+      },
+
+      // @ts-ignore
+      user: undefined
+    };
+
+    return surrogate;
   }
 }
 
 /**
  * @param {Options=} opts (Optional)
- * @returns {UserGUNNode}
+ * @returns {GUNNode}
  */
 export const createMockGun = (opts = {}) => new MockGun(opts);

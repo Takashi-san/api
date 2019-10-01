@@ -184,7 +184,7 @@ describe("MockGun", () => {
     it("comes non-authenticated by default", () => {
       const gun = createMockGun();
 
-      expect(gun.is).toBeUndefined();
+      expect(gun.user().is).toBeUndefined();
     });
 
     it("comes pre-authenticated when told so", () => {
@@ -192,35 +192,20 @@ describe("MockGun", () => {
         isAuth: true
       });
 
-      expect(gun.is).toBeDefined();
+      expect(gun.user().is).toBeDefined();
     });
 
-    it("authenticates", () => {
-      expect.assertions(2);
+    it("authenticates and logoffs", async () => {
+      const user = createMockGun().user();
 
-      const gun = createMockGun();
+      const ack = await new Promise(res =>
+        user.auth(Math.random().toString(), Math.random().toString(), res)
+      );
 
-      gun.auth(Math.random().toString(), Math.random().toString(), ack => {
-        expect(ack.err).toBeUndefined();
-      });
-
-      expect(gun.is).toBeDefined();
-    });
-
-    it("authenticates and logoffs", () => {
-      expect.assertions(3);
-
-      const gun = createMockGun();
-
-      gun.auth(Math.random().toString(), Math.random().toString(), ack => {
-        expect(ack.err).toBeUndefined();
-      });
-
-      expect(gun.is).toBeDefined();
-
-      gun.leave();
-
-      expect(gun.is).toBeUndefined();
+      expect(ack.err).toBeUndefined();
+      expect(user.is).toBeDefined();
+      user.leave();
+      expect(user.is).toBeUndefined();
     });
 
     it("mocks creating an user", () => {
@@ -228,13 +213,30 @@ describe("MockGun", () => {
 
       const gun = createMockGun();
 
-      gun.create(Math.random().toString(), Math.random().toString(), ack => {
-        expect(ack.err).toBeUndefined();
-      });
+      gun
+        .user()
+        .create(Math.random().toString(), Math.random().toString(), ack => {
+          expect(ack.err).toBeUndefined();
+        });
     });
   });
 
   describe("get", () => {
+    it("Does not create a phantom node if a non-existing node is accessed", async () => {
+      const gun = createMockGun();
+
+      const key = Math.random().toString();
+
+      // this previously created an empty phantom subgraph (sub instance of
+      // mockgun)
+      await new Promise(res => gun.get(key).once(res));
+
+      // @ts-ignore
+      const phantomSubGraphExists = typeof gun.graph[key] !== "undefined";
+
+      expect(phantomSubGraphExists).toBe(false);
+    });
+
     it("throws a TypeError if called without a key", () => {
       expect(() => {
         const gun = createMockGun();
@@ -840,7 +842,7 @@ describe("MockGun", () => {
     });
 
     it("does not throw an invalid graph error on putting to node child of the user root", () => {
-      const user = createMockGun({ isAuth: true });
+      const user = createMockGun({ isAuth: true }).user();
 
       const notActuallyABadEdge = user.get(Math.random().toString());
 

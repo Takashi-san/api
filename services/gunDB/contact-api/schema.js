@@ -102,7 +102,7 @@ exports.isChat = o => {
     return false;
   }
 
-  return obj.messages.every(item => isChatMessage(item));
+  return obj.messages.every(item => exports.isChatMessage(item));
 };
 
 /**
@@ -311,7 +311,7 @@ exports.isOutgoing = o => {
   const obj = /** @type {Outgoing} */ (o);
 
   const messagesAreMessages = Object.values(obj.messages).every(item =>
-    isMessage(item)
+    exports.isMessage(item)
   );
 
   return typeof obj.with === "string" && messagesAreMessages;

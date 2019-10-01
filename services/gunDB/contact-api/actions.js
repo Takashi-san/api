@@ -3,10 +3,10 @@
  */
 const ErrorCode = require("./errorCode");
 const Key = require("./key");
-const { gun: mainGun, user: userGun } = require("./gun");
 const { isHandshakeRequest } = require("./schema");
 /**
  * @typedef {import('./SimpleGUN').GUNNode} GUNNode
+ * @typedef {import('./SimpleGUN').ISEA} ISEA
  * @typedef {import('./SimpleGUN').UserGUNNode} UserGUNNode
  * @typedef {import('./schema').HandshakeRequest} HandshakeRequest
  * @typedef {import('./schema').Message} Message
@@ -17,7 +17,7 @@ const { isHandshakeRequest } = require("./schema");
 /**
  * An special message signaling the acceptance.
  */
-exports.INITIAL_MSG = "$$__SHOCKWALLET__INITIAL__MESSAGE";
+const INITIAL_MSG = "$$__SHOCKWALLET__INITIAL__MESSAGE";
 
 /**
  * @returns {Message}
@@ -32,65 +32,92 @@ const __createInitialMessage = () => ({
  * @param {string} requestorPubKey The public key of the requestor, will be used
  * to encrypt the response.
  * @param {string} responseBody An string that will be put to the request.
+ * @param {GUNNode} gun
  * @param {UserGUNNode} user
+ * @param {ISEA} SEA
  * @throws {ErrorCode.COULDNT_PUT_REQUEST_RESPONSE}
  * @returns {Promise<void>}
  */
-exports.__encryptAndPutResponseToRequest = (
+const __encryptAndPutResponseToRequest = async (
   requestID,
   requestorPubKey,
   responseBody,
-  user
-) =>
-  new Promise((resolve, reject) => {
-    const u = /** @type {UserGUNNode} */ (user);
+  gun,
+  user,
+  SEA
+) => {
+  const u = /** @type {UserGUNNode} */ (user);
 
-    if (!u.is) {
-      throw new Error(ErrorCode.NOT_AUTH);
-    }
+  if (!u.is) {
+    throw new Error(ErrorCode.NOT_AUTH);
+  }
 
-    if (typeof requestID !== "string") {
-      throw new TypeError();
-    }
+  if (typeof requestID !== "string") {
+    throw new TypeError();
+  }
 
-    if (requestID.length === 0) {
-      throw new TypeError();
-    }
+  if (requestID.length === 0) {
+    throw new TypeError();
+  }
 
-    if (typeof requestorPubKey !== "string") {
-      throw new TypeError();
-    }
+  if (typeof requestorPubKey !== "string") {
+    throw new TypeError();
+  }
 
-    if (requestorPubKey.length === 0) {
-      throw new TypeError();
-    }
+  if (requestorPubKey.length === 0) {
+    throw new TypeError();
+  }
 
-    if (typeof responseBody !== "string") {
-      throw new TypeError();
-    }
+  if (typeof responseBody !== "string") {
+    throw new TypeError();
+  }
 
-    if (responseBody.length === 0) {
-      throw new TypeError();
-    }
+  if (responseBody.length === 0) {
+    throw new TypeError();
+  }
 
-    const currentHandshakeNode = u
-      .get(Key.CURRENT_HANDSHAKE_NODE)
-      .get(requestID);
+  const currentHandshakeNode = u.get(Key.CURRENT_HANDSHAKE_NODE).get(requestID);
 
+  /** @type {string} */
+  const requestorEpub = await new Promise((res, rej) => {
+    gun
+      .user(requestorPubKey)
+      .get("epub")
+      .once(epub => {
+        if (typeof epub !== "string") {
+          rej(new Error("Expected gun.user(pub).get(epub) to be an string."));
+        } else {
+          if (epub.length === 0) {
+            rej(
+              new Error(
+                "Expected gun.user(pub).get(epub) to be a populated string."
+              )
+            );
+          } else {
+            res(epub);
+          }
+        }
+      });
+  });
+
+  const secret = await SEA.secret(requestorEpub, user._.sea);
+  const encryptedResponse = await SEA.encrypt(responseBody, secret);
+
+  return new Promise((res, rej) => {
     currentHandshakeNode.put(
       {
-        // TODO: encrypt
-        response: "$$_TEST_" + responseBody
+        response: encryptedResponse
       },
       ack => {
         if (ack.err) {
-          reject(new Error(ErrorCode.COULDNT_PUT_REQUEST_RESPONSE));
+          rej(new Error(ErrorCode.COULDNT_PUT_REQUEST_RESPONSE));
         } else {
-          resolve();
+          res();
         }
       }
     );
   });
+};
 
 /**
  * Create a an outgoing feed. The feed will have an initial special acceptance
@@ -102,42 +129,53 @@ exports.__encryptAndPutResponseToRequest = (
  * message for it also cannot be created. These errors aren't coded as they are
  * not meant to be caught outside of this module.
  * @param {UserGUNNode} user
+ * @param {ISEA} SEA
  * @returns {Promise<string>}
  */
-exports.__createOutgoingFeed = (withPublicKey, user) =>
-  new Promise((resolve, reject) => {
-    if (!user.is) {
-      throw new Error(ErrorCode.NOT_AUTH);
-    }
+const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
+  if (!user.is) {
+    throw new Error(ErrorCode.NOT_AUTH);
+  }
 
-    /** @type {PartialOutgoing} */
-    const newPartialOutgoingFeed = {
-      with: withPublicKey
-    };
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+  const encryptedForMeRecipientPub = await SEA.encrypt(withPublicKey, mySecret);
 
-    const outgoingFeed = user
-      .get(Key.OUTGOINGS)
-      .set(newPartialOutgoingFeed, outgoingFeedAck => {
-        if (outgoingFeedAck.err) {
-          reject(new Error(outgoingFeedAck.err));
+  /** @type {PartialOutgoing} */
+  const newPartialOutgoingFeed = {
+    with: encryptedForMeRecipientPub
+  };
+
+  /** @type {GUNNode} */
+  const outgoingFeed = await new Promise((res, rej) => {
+    const outFeed = user.get(Key.OUTGOINGS).set(newPartialOutgoingFeed, ack => {
+      if (ack.err) {
+        rej(new Error(ack.err));
+      } else {
+        res(outFeed);
+      }
+    });
+  });
+
+  const outgoingFeedID = /** @type {string} */ (outgoingFeed._.get);
+
+  try {
+    await new Promise((res, rej) => {
+      outgoingFeed.get(Key.MESSAGES).set(__createInitialMessage(), ack => {
+        if (ack.err) {
+          rej(new Error(ack.err));
         } else {
-          outgoingFeed
-            .get(Key.MESSAGES)
-            .set(__createInitialMessage(), msgAck => {
-              if (msgAck.err) {
-                user
-                  .get(Key.OUTGOINGS)
-                  .get(/** @type {string} */ (outgoingFeed._.get))
-                  .put(null);
-
-                reject(new Error());
-              } else {
-                resolve(/** @type {string} */ (outgoingFeed._.get));
-              }
-            });
+          res();
         }
       });
-  });
+    });
+  } catch (e) {
+    console.warn(
+      `Got an error ${e.message} setting the initial message on an outgoing feed. Will now try to null out the outgoing feed...`
+    );
+  }
+
+  return outgoingFeedID;
+};
 
 /**
  * Given a request's ID, that should be found on the user's current handshake
@@ -145,99 +183,120 @@ exports.__createOutgoingFeed = (withPublicKey, user) =>
  * requestor, then encrypting and putting the id of this newly created outgoing
  * feed on the response prop of the request.
  * @param {string} requestID The id for the request to accept.
- * @param {UserGUNNode=} user Pass only for testing purposes.
- * @param {typeof __createOutgoingFeed} outgoingFeedCreator Pass only for testing.
- * purposes.
- * @param {typeof __encryptAndPutResponseToRequest} responseToRequestEncryptorAndPutter Pass only for testing.
+ * @param {GUNNode} gun
+ * @param {UserGUNNode} user Pass only for testing purposes.
+ * @param {ISEA} SEA
+ * @param {typeof __createOutgoingFeed} outgoingFeedCreator Pass only
+ * for testing. purposes.
+ * @param {typeof __encryptAndPutResponseToRequest}
+ * responseToRequestEncryptorAndPutter Pass only for testing.
  * @throws {Error} Throws if trying to accept an invalid request, or an error on
  * gun's part.
  * @returns {Promise<void>}
  */
-exports.acceptRequest = (
+const acceptRequest = async (
   requestID,
-  user = userGun,
+  gun,
+  user,
+  SEA,
   outgoingFeedCreator = __createOutgoingFeed,
   responseToRequestEncryptorAndPutter = __encryptAndPutResponseToRequest
-) =>
-  new Promise((resolve, reject) => {
-    const u = /** @type {UserGUNNode} */ user;
+) => {
+  if (!user.is) {
+    throw new Error(ErrorCode.NOT_AUTH);
+  }
 
-    if (!u.is) {
-      throw new Error(ErrorCode.NOT_AUTH);
-    }
+  const requestNode = user.get(Key.CURRENT_HANDSHAKE_NODE).get(requestID);
 
-    const requestNode = u.get(Key.CURRENT_HANDSHAKE_NODE).get(requestID);
+  // this detects an empty node
+  if (typeof requestNode._.put === "undefined") {
+    throw new Error(ErrorCode.TRIED_TO_ACCEPT_AN_INVALID_REQUEST);
+  }
 
-    // this detects an empty node
-    if (typeof requestNode._.put === "undefined") {
-      throw new Error(ErrorCode.TRIED_TO_ACCEPT_AN_INVALID_REQUEST);
-    }
-
-    requestNode.once(handshakeRequest => {
-      if (!isHandshakeRequest(handshakeRequest)) {
-        reject(new Error(ErrorCode.TRIED_TO_ACCEPT_AN_INVALID_REQUEST));
+  /** @type {HandshakeRequest} */
+  const handshakeRequest = await new Promise((res, rej) => {
+    requestNode.once(hr => {
+      if (!isHandshakeRequest(hr)) {
+        rej(new Error(ErrorCode.TRIED_TO_ACCEPT_AN_INVALID_REQUEST));
         return;
       }
 
-      /** @type {string} */
-      let outgoingFeedID;
-
-      outgoingFeedCreator(handshakeRequest.from, user)
-        .then(outfid => {
-          outgoingFeedID = outfid;
-
-          return responseToRequestEncryptorAndPutter(
-            requestID,
-            "$$_TEST",
-            outgoingFeedID,
-            user
-          );
-        })
-        .then(
-          () =>
-            new Promise(res => {
-              user
-                .get(Key.USER_TO_INCOMING)
-                .get(handshakeRequest.from)
-                .put(handshakeRequest.response, ack => {
-                  if (ack.err) {
-                    throw new Error(ack.err);
-                  } else {
-                    res();
-                  }
-                });
-            })
-        )
-        .then(
-          () =>
-            new Promise(res => {
-              user
-                .get(Key.RECIPIENT_TO_OUTGOING)
-                .get(handshakeRequest.from)
-                .put(outgoingFeedID, ack => {
-                  if (ack.err) {
-                    throw new Error(ack.err);
-                  } else {
-                    res();
-                  }
-                });
-            })
-        )
-        .then(() => {
-          resolve();
-        })
-        .catch(() => {
-          reject(new Error(ErrorCode.COULDNT_ACCEPT_REQUEST));
-        });
+      res(hr);
     });
   });
+
+  const outgoingFeedID = await outgoingFeedCreator(
+    handshakeRequest.from,
+    user,
+    SEA
+  );
+
+  await responseToRequestEncryptorAndPutter(
+    requestID,
+    handshakeRequest.from,
+    outgoingFeedID,
+    gun,
+    user,
+    SEA
+  );
+
+  /** @type {string} */
+  const requestorEpub = await new Promise(res => {
+    gun
+      .user(handshakeRequest.from)
+      .get("epub")
+      .once(epub => {
+        // @ts-ignore
+        res(epub);
+      });
+  });
+
+  const ourSecret = await SEA.secret(requestorEpub, user._.sea);
+  const mySecret = await SEA.secret(user._.sea.pub, user._.sea);
+  const incomingID = await SEA.decrypt(handshakeRequest.response, ourSecret);
+
+  const encryptedForMeIncomingID = await SEA.encrypt(incomingID, mySecret);
+
+  const encryptedForMeRequestorPK = await SEA.encrypt(
+    handshakeRequest.from,
+    mySecret
+  );
+
+  await new Promise((res, rej) => {
+    user
+      .get(Key.USER_TO_INCOMING)
+      .get(encryptedForMeRequestorPK)
+      .put(encryptedForMeIncomingID, ack => {
+        if (ack.err) {
+          rej(new Error(ack.err));
+        } else {
+          res();
+        }
+      });
+  });
+
+  const encryptedForMeOutgoingID = await SEA.encrypt(outgoingFeedID, mySecret);
+
+  await new Promise((res, rej) => {
+    user
+      .get(Key.RECIPIENT_TO_OUTGOING)
+      .get(encryptedForMeRequestorPK)
+      .put(encryptedForMeOutgoingID, ack => {
+        if (ack.err) {
+          rej(new Error(ack.err));
+        } else {
+          res();
+        }
+      });
+  });
+};
 
 /**
  * @param {string} user
  * @param {string} pass
  * @param {UserGUNNode} userNode
  */
-exports.authenticate = (user, pass, userNode = userGun) =>
+const authenticate = (user, pass, userNode) =>
   new Promise((resolve, reject) => {
     if (typeof user !== "string") {
       throw new TypeError("expected user to be of type string");
@@ -272,11 +331,11 @@ exports.authenticate = (user, pass, userNode = userGun) =>
 
 /**
  * @param {string} publicKey
- * @param {UserGUNNode=} user Pass only for testing.
+ * @param {UserGUNNode} user Pass only for testing.
  * @throws {Error} If there's an error saving to the blacklist.
  * @returns {Promise<void>}
  */
-exports.blacklist = (publicKey, user = userGun) =>
+const blacklist = (publicKey, user) =>
   new Promise((resolve, reject) => {
     if (!user.is) {
       throw new Error(ErrorCode.NOT_AUTH);
@@ -292,12 +351,12 @@ exports.blacklist = (publicKey, user = userGun) =>
   });
 
 /**
- * @param {GUNNode=} gun
- * @param {UserGUNNode=} user
+ * @param {GUNNode} gun
+ * @param {UserGUNNode} user
  * @throws {TypeError}
  * @returns {Promise<void>}
  */
-exports.generateNewHandshakeNode = (gun = mainGun, user = userGun) =>
+const generateNewHandshakeNode = (gun, user) =>
   new Promise((resolve, reject) => {
     if (!user.is) {
       throw new Error(ErrorCode.NOT_AUTH);
@@ -326,7 +385,7 @@ exports.generateNewHandshakeNode = (gun = mainGun, user = userGun) =>
  * @throws {Error} UNSUCCESSFUL_LOGOUT
  * @returns {Promise<void>}
  */
-exports.logout = (user = userGun) => {
+const logout = user => {
   if (!user.is) {
     return Promise.reject(new Error(ErrorCode.NOT_AUTH));
   }
@@ -349,7 +408,7 @@ exports.logout = (user = userGun) => {
  * @param {UserGUNNode} user
  * @returns {Promise<void>}
  */
-exports.register = (alias, pass, user = userGun) =>
+const register = (alias, pass, user) =>
   new Promise((resolve, reject) => {
     const u = /** @type {UserGUNNode} */ (user);
 
@@ -382,111 +441,171 @@ exports.register = (alias, pass, user = userGun) =>
  * Sends a handshake to the
  * @param {string} handshakeAddress
  * @param {string} recipientPublicKey
+ * @param {GUNNode} gun
  * @param {UserGUNNode} user
+ * @param {ISEA} SEA
  * @throws {Error|TypeError}
  * @returns {Promise<void>}
  */
-exports.sendHandshakeRequest = (
+const sendHandshakeRequest = async (
   handshakeAddress,
   recipientPublicKey,
-  gun = mainGun,
-  user = userGun
-) =>
-  new Promise((resolve, reject) => {
-    if (!user.is) {
-      throw new Error(ErrorCode.NOT_AUTH);
-    }
+  gun,
+  user,
+  SEA
+) => {
+  if (!user.is) {
+    throw new Error(ErrorCode.NOT_AUTH);
+  }
 
-    if (typeof handshakeAddress !== "string") {
-      throw new TypeError(
-        `handshakeAddress is not string, got: ${typeof handshakeAddress}`
-      );
-    }
+  if (typeof handshakeAddress !== "string") {
+    throw new TypeError(
+      `handshakeAddress is not string, got: ${typeof handshakeAddress}`
+    );
+  }
 
-    if (typeof recipientPublicKey !== "string") {
-      throw new TypeError(
-        `recipientPublicKey is not string, got: ${typeof recipientPublicKey}`
-      );
-    }
+  if (typeof recipientPublicKey !== "string") {
+    throw new TypeError(
+      `recipientPublicKey is not string, got: ${typeof recipientPublicKey}`
+    );
+  }
 
-    if (handshakeAddress.length === 0) {
-      throw new TypeError("handshakeAddress is an string of length 0");
-    }
+  if (handshakeAddress.length === 0) {
+    throw new TypeError("handshakeAddress is an string of length 0");
+  }
 
-    if (recipientPublicKey.length === 0) {
-      throw new TypeError("recipientPublicKey is an string of length 0");
-    }
+  if (recipientPublicKey.length === 0) {
+    throw new TypeError("recipientPublicKey is an string of length 0");
+  }
 
-    __createOutgoingFeed(recipientPublicKey, user)
-      .then(async outgoingFeedID => {
-        if (typeof user.is === "undefined") {
-          reject(new TypeError());
-          return;
+  const outgoingFeedID = await __createOutgoingFeed(
+    recipientPublicKey,
+    user,
+    SEA
+  );
+
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+  const encryptedForMeRecipientPublicKey = await SEA.encrypt(
+    recipientPublicKey,
+    mySecret
+  );
+  const encryptedForMeOutgoingID = await SEA.encrypt(outgoingFeedID, mySecret);
+
+  await new Promise((res, rej) => {
+    user
+      .get(Key.RECIPIENT_TO_OUTGOING)
+      .get(encryptedForMeRecipientPublicKey)
+      .put(encryptedForMeOutgoingID, ack => {
+        if (ack.err) {
+          rej(
+            new Error(
+              `Error writing to recipientToOutgoing on handshake request creation: ${ack.err}`
+            )
+          );
+        } else {
+          res();
         }
-
-        await new Promise((res, rej) => {
-          user
-            .get(Key.RECIPIENT_TO_OUTGOING)
-            .get(recipientPublicKey)
-            .put(outgoingFeedID, ack => {
-              if (ack.err) {
-                rej(
-                  new Error(
-                    `error writing to recipientToOutgoing on handshake request creation: ${ack.err}`
-                  )
-                );
-              } else {
-                res();
-              }
-            });
-        });
-
-        /** @type {HandshakeRequest} */
-        const handshakeRequestData = {
-          // TODO: Encrypt, make it indistinguishable from a non-response
-          response: outgoingFeedID,
-          from: user.is.pub,
-          timestamp: Date.now()
-        };
-
-        const handshakeRequestNode = gun
-          .get(Key.HANDSHAKE_NODES)
-          .get(handshakeAddress)
-          .set(handshakeRequestData, ack => {
-            if (ack.err) {
-              reject(new Error(ack.err));
-            } else {
-              user.get(Key.SENT_REQUESTS).set(handshakeRequestNode, ack => {
-                if (ack.err) {
-                  reject(new Error(ack.err));
-                } else {
-                  user
-                    .get(Key.REQUEST_TO_USER)
-                    .get(/** @type {string} */ (handshakeRequestNode._.get))
-                    .put(recipientPublicKey, ack => {
-                      if (ack.err) {
-                        reject(new Error(ack.err));
-                      } else {
-                        resolve();
-                      }
-                    });
-                }
-              });
-            }
-          });
-      })
-      .catch(e => {
-        reject(e);
       });
   });
+
+  /** @type {string} */
+  const recipientEpub = await new Promise((res, rej) => {
+    gun
+      .user(recipientPublicKey)
+      .get("epub")
+      .once(epub => {
+        if (typeof epub !== "string") {
+          rej(
+            new Error(
+              `Expected gun.user(pub).get(epub) to be an string. Instead got: ${typeof epub}`
+            )
+          );
+        } else {
+          if (epub.length === 0) {
+            rej(
+              new Error(
+                "Expected gun.user(pub).get(epub) to be a populated string."
+              )
+            );
+          } else {
+            res(epub);
+          }
+        }
+      });
+  });
+
+  const secret = await SEA.secret(recipientEpub, user._.sea);
+  const encryptedOutgoingFeedID = await SEA.encrypt(outgoingFeedID, secret);
+
+  /** @type {HandshakeRequest} */
+  const handshakeRequestData = {
+    response: encryptedOutgoingFeedID,
+    from: user.is.pub,
+    timestamp: Date.now()
+  };
+
+  /** @type {GUNNode} */
+  const handshakeRequest = await new Promise((res, rej) => {
+    const hr = gun
+      .get(Key.HANDSHAKE_NODES)
+      .get(handshakeAddress)
+      .set(handshakeRequestData, ack => {
+        if (ack.err) {
+          rej(new Error(`Error trying to create request: ${ack.err}`));
+        } else {
+          res(hr);
+        }
+      });
+  });
+
+  const encryptedForMeRequestID = await SEA.encrypt(
+    /** @type {string} */ (handshakeRequest._.get),
+    mySecret
+  );
+
+  // This needs to come before the write to sent requests. Because that write
+  // triggers Jobs.onAcceptedRequests and it in turn reads from request-to-user
+  await new Promise((res, rej) => {
+    user
+      .get(Key.REQUEST_TO_USER)
+      .get(encryptedForMeRequestID)
+      .put(encryptedForMeRecipientPublicKey, ack => {
+        if (ack.err) {
+          rej(
+            new Error(
+              `Error saving recipient public key to request to user: ${ack.err}`
+            )
+          );
+        } else {
+          res();
+        }
+      });
+  });
+
+  await new Promise((res, rej) => {
+    user.get(Key.SENT_REQUESTS).set(handshakeRequest, ack => {
+      if (ack.err) {
+        rej(
+          new Error(
+            `Error saving newly created request to sent requests: ${ack.err}`
+          )
+        );
+      } else {
+        res();
+      }
+    });
+  });
+};
 
 /**
  * @param {string} recipientPublicKey
  * @param {string} body
+ * @param {GUNNode} gun
  * @param {UserGUNNode} user
+ * @param {ISEA} SEA
  * @returns {Promise<void>}
  */
-exports.sendMessage = (recipientPublicKey, body, user) => {
+const sendMessage = async (recipientPublicKey, body, gun, user, SEA) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
@@ -515,43 +634,74 @@ exports.sendMessage = (recipientPublicKey, body, user) => {
     );
   }
 
-  return new Promise((res, rej) => {
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+  const encryptedForMeRecipientPublicKey = await SEA.encrypt(
+    recipientPublicKey,
+    mySecret
+  );
+
+  /** @type {string} */
+  const encryptedForMeOutgoingID = await new Promise((res, rej) => {
     user
       .get(Key.RECIPIENT_TO_OUTGOING)
-      .get(recipientPublicKey)
-      .once(outgoingID => {
-        if (typeof outgoingID === "string") {
-          res(outgoingID);
+      .get(encryptedForMeRecipientPublicKey)
+      .once(efmoid => {
+        if (typeof efmoid === "string") {
+          res(efmoid);
         } else {
           rej(
             new Error(
-              `Expected outgoingID to be an string, instead got: ${typeof outgoingID}`
+              `Expected outgoingID to be an string, instead got: ${typeof efmoid}`
             )
           );
         }
       });
-  }).then(
-    (/** @type {string} */ outgoingID) =>
-      new Promise((res, rej) => {
-        /** @type {Message} */
-        const newMessage = {
-          body,
-          timestamp: Date.now()
-        };
+  });
 
-        user
-          .get(Key.OUTGOINGS)
-          .get(outgoingID)
-          .get(Key.MESSAGES)
-          .set(newMessage, ack => {
-            if (ack.err) {
-              rej(ack.err);
-            } else {
-              res();
-            }
-          });
-      })
-  );
+  /** @type {string} */
+  const recipientEpub = await new Promise((res, rej) => {
+    gun
+      .user(recipientPublicKey)
+      .get("epub")
+      .once(epub => {
+        if (typeof epub !== "string") {
+          rej(new Error("Expected gun.user(pub).get(epub) to be an string."));
+        } else {
+          if (epub.length === 0) {
+            rej(
+              new Error(
+                "Expected gun.user(pub).get(epub) to be a populated string."
+              )
+            );
+          }
+          res(epub);
+        }
+      });
+  });
+
+  const secret = await SEA.secret(recipientEpub, user._.sea);
+  const encryptedBody = await SEA.encrypt(body, secret);
+
+  const newMessage = {
+    body: encryptedBody,
+    timestamp: Date.now()
+  };
+
+  const outgoingID = await SEA.decrypt(encryptedForMeOutgoingID, mySecret);
+
+  return new Promise((res, rej) => {
+    user
+      .get(Key.OUTGOINGS)
+      .get(outgoingID)
+      .get(Key.MESSAGES)
+      .set(newMessage, ack => {
+        if (ack.err) {
+          rej(ack.err);
+        } else {
+          res();
+        }
+      });
+  });
 };
 
 /**
@@ -560,7 +710,7 @@ exports.sendMessage = (recipientPublicKey, body, user) => {
  * @throws {TypeError} Rejects if avatar is not an string or an empty string.
  * @returns {Promise<void>}
  */
-exports.setAvatar = (avatar, user = userGun) =>
+const setAvatar = (avatar, user) =>
   new Promise((resolve, reject) => {
     if (!user.is) {
       throw new Error(ErrorCode.NOT_AUTH);
@@ -597,7 +747,7 @@ exports.setAvatar = (avatar, user = userGun) =>
  * string.
  * @returns {Promise<void>}
  */
-exports.setDisplayName = (displayName, user = userGun) =>
+const setDisplayName = (displayName, user) =>
   new Promise((resolve, reject) => {
     if (!user.is) {
       throw new Error(ErrorCode.NOT_AUTH);
@@ -622,3 +772,19 @@ exports.setDisplayName = (displayName, user = userGun) =>
         }
       });
   });
+
+module.exports = {
+  INITIAL_MSG,
+  __encryptAndPutResponseToRequest,
+  __createOutgoingFeed,
+  acceptRequest,
+  authenticate,
+  blacklist,
+  generateNewHandshakeNode,
+  logout,
+  register,
+  sendHandshakeRequest,
+  sendMessage,
+  setAvatar,
+  setDisplayName
+};

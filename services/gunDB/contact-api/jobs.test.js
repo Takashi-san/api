@@ -1,106 +1,124 @@
 /**
  * @prettier
  */
+const Actions = require("./actions");
+const ErrorCode = require("./errorCode");
 const Events = require("./events");
 const Jobs = require("./jobs");
 const Key = require("./key");
-const Testing = require("./testing");
 const { createMockGun } = require("./__mocks__/mock-gun");
+// @ts-ignore
+require("gun/sea");
+
+/** @type {import('./SimpleGUN').ISEA} */
+// @ts-ignore
+const Sea = SEA;
 
 describe("__onAcceptedRequests()", () => {
-  it("throws a NOT_AUTH error if supplied with a non authenticated node", () => {
-    expect(() => {
-      Jobs.onAcceptedRequests(() => {}, createMockGun());
-    }).toThrow();
+  it("throws a NOT_AUTH error if supplied with a non authenticated node", async () => {
+    expect.assertions(1);
+
+    try {
+      await Jobs.onAcceptedRequests(
+        () => {},
+        createMockGun(),
+        createMockGun().user(),
+        Sea
+      );
+    } catch (e) {
+      expect(e.message).toBe(ErrorCode.NOT_AUTH);
+    }
   });
 
   it("reacts to accepted requests by creating a record in the user-to-incoming map", async done => {
     expect.assertions(2);
 
-    const requestorPK = Math.random().toString();
-    const recipientPK = Math.random().toString();
-    const fakeIncomingIDSuffix = Math.random().toString();
-
     const gun = createMockGun();
 
-    /**
-     * @type {import('./schema').HandshakeRequest}
-     */
-    const fakeRequest = {
-      from: requestorPK,
-      response: Math.random().toString(),
-      timestamp: Math.random()
-    };
+    const requestorUser = gun.user();
+    const recipientUser = gun.user();
+    await new Promise(res => requestorUser.auth("a", "a", res));
+    await new Promise(res => recipientUser.auth("b", "b", res));
 
-    Testing.injectSeaMockToGun(gun);
+    const { pub: requestorPub } = requestorUser._.sea;
+    const { epub: recipientEpub, pub: recipientPub } = recipientUser._.sea;
 
-    const user = gun.user();
+    const recipientSecret = await Sea.secret(
+      recipientEpub,
+      recipientUser._.sea
+    );
 
-    await new Promise((res, rej) => {
-      user.auth(requestorPK, Math.random().toString(), ack => {
-        if (ack.err) {
-          rej(ack.err);
+    await Jobs.onAcceptedRequests(
+      Events.onSentRequests,
+      gun,
+      requestorUser,
+      Sea
+    );
+
+    await Actions.generateNewHandshakeNode(gun, recipientUser);
+
+    /** @type {string} */
+    const handshakeAddr = await new Promise((res, rej) => {
+      recipientUser.get(Key.CURRENT_HANDSHAKE_NODE).once(n => {
+        if (typeof n === "object" && n !== null) {
+          res(n._["#"]);
         } else {
-          res();
+          rej(new TypeError("current handshake node not a node"));
         }
       });
     });
 
-    // the next 2 steps mimic what Actions.sendRequest does except for creating
-    // an outgoing feed
+    await Actions.sendHandshakeRequest(
+      handshakeAddr,
+      recipientPub,
+      gun,
+      requestorUser,
+      Sea
+    );
 
-    /** @type {string} */
-    const requestID = await new Promise((res, rej) => {
-      const reqID = user.get(Key.SENT_REQUESTS).set(fakeRequest, ack => {
-        if (ack.err) {
-          rej(ack.err);
-        } else {
-          res(reqID);
-        }
-      })._.get;
+    const requestorOutgoingID = await new Promise(res => {
+      requestorUser
+        .get(Key.OUTGOINGS)
+        .once()
+        .map()
+        .once((_, feedID) => {
+          res(feedID);
+        });
     });
 
-    await new Promise((res, rej) => {
-      user
-        .get(Key.REQUEST_TO_USER)
-        .get(requestID)
-        .put(recipientPK, ack => {
-          if (ack.err) {
-            rej(ack.err);
-          } else {
-            res();
+    /** @type {string} */
+    const requestID = await new Promise(res => {
+      recipientUser
+        .get(Key.CURRENT_HANDSHAKE_NODE)
+        .once()
+        .map()
+        .once((_, reqID) => {
+          if (reqID !== "unused") {
+            res(reqID);
           }
         });
     });
 
-    Jobs.onAcceptedRequests(Events.onSentRequests, user);
+    await Actions.acceptRequest(requestID, gun, recipientUser, Sea);
 
-    await new Promise((res, rej) => {
-      user
-        .get(Key.SENT_REQUESTS)
-        .get(requestID)
-        .put(
-          {
-            response: "$$_TEST_" + fakeIncomingIDSuffix
-          },
-          ack => {
-            if (ack.err) {
-              rej(ack.err);
-            } else {
-              res();
-            }
-          }
-        );
-    });
-
-    // After putting the test response to the request, acceptedRequest should
-    user
+    recipientUser
       .get(Key.USER_TO_INCOMING)
       .once()
       .map()
-      .once((outgoingID, userPK) => {
-        expect(outgoingID).toMatch("$$_TEST_" + fakeIncomingIDSuffix);
-        expect(userPK).toMatch(recipientPK);
+      .once(async (encryptedIncomingID, encryptedUserPub) => {
+        if (typeof encryptedIncomingID !== "string") {
+          throw new TypeError("typeof encryptedIncomingID !== 'string'");
+        }
+
+        const incomingID = await Sea.decrypt(
+          encryptedIncomingID,
+          recipientSecret
+        );
+
+        const userPub = await Sea.decrypt(encryptedUserPub, recipientSecret);
+
+        expect(incomingID).toMatch(requestorOutgoingID);
+        expect(userPub).toMatch(requestorPub);
         done();
       });
   });
