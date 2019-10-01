@@ -598,9 +598,9 @@ const register = (alias, pass) =>
  * @returns {Mediator}
  */
 const createMediator = socket => {
-  if (isAuthenticating() || !isAuthenticated()) {
-    throw new Error("Gun must be authenticated to create a Mediator");
-  }
+  // if (isAuthenticating() || !isAuthenticated()) {
+  //   throw new Error("Gun must be authenticated to create a Mediator");
+  // }
 
   return new Mediator(socket);
 };
