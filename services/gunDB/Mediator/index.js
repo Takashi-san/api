@@ -554,7 +554,7 @@ const authenticate = (alias, pass) => {
  * @param {string} pass
  * @throws {Error} If gun is authenticated or is in the process of
  * authenticating. Use `isAuthenticating()` and `isAuthenticated()` to check for
- * this first.
+ * this first. It can also throw if the alias is already registered on gun.
  * @returns {Promise<string>}
  */
 const register = (alias, pass) =>
