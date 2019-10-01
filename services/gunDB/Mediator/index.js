@@ -1,15 +1,13 @@
 const Gun = require("gun");
 const debounce = require("lodash/debounce");
 const once = require("lodash/once");
-// @ts-ignore
-require("gun/sea");
 
 // @ts-ignore
 require("gun/sea");
 
 /** @type {import('../contact-api/SimpleGUN').ISEA} */
 // @ts-ignore
-const Sea = SEA;
+const Sea = global.SEA;
 
 const auth = require("../../auth/auth");
 
