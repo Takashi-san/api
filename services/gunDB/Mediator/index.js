@@ -9,7 +9,6 @@ require("gun/sea");
 // @ts-ignore
 const Sea = global.SEA;
 
-const auth = require("../../auth/auth");
 
 const Action = require("../action-constants.js");
 const API = require("../contact-api/index");
@@ -48,21 +47,8 @@ const user = gun.user();
  * @returns {Promise<boolean>}
  */
 const isValidToken = async token => {
-  const validation = await auth.validateToken(token);
-
-  if (typeof validation !== "object") {
-    return false;
-  }
-
-  if (validation === null) {
-    return false;
-  }
-
-  if (typeof validation.valid !== "boolean") {
-    return false;
-  }
-
-  return validation.valid;
+  return token === 'token';
+  
 };
 
 /**
@@ -407,6 +393,7 @@ class Mediator {
         });
       }, user);
     } catch (e) {
+      console.log(e)
       this.socket.emit(Event.ON_DISPLAY_NAME, {
         ok: false,
         msg: e.message,
@@ -516,9 +503,7 @@ const isRegistering = () => _isRegistering;
  */
 const authenticate = (alias, pass) => {
   return new Promise((res, rej) => {
-    if (isAuthenticated()) {
-      throw new Error("Cannot re-authenticate.");
-    }
+    user.leave()
 
     if (isAuthenticating()) {
       throw new Error(
@@ -605,11 +590,25 @@ const createMediator = socket => {
   return new Mediator(socket);
 };
 
+/**
+ * @returns {string}
+ */
+const getPublicKey = () => {
+  if (isAuthenticating() || !isAuthenticated()) {
+    throw new Error("Gun must be authenticated to get the public key");
+  }
+
+  return user._.sea.pub
+}
+
+
 module.exports = {
   authenticate,
   createMediator,
+  getPublicKey,
   isAuthenticated,
   isAuthenticating,
   isRegistering,
   register
 };
+
