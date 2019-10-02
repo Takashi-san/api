@@ -1152,29 +1152,19 @@ module.exports = (
 
   app.get("/api/lnd/transactions", (req, res) => {
     try {
-      /** @type {NonPaginatedTransactionsRequest&PaginatedTransactionsRequest} */
+      /** @type {PaginatedTransactionsRequest} */
       const request = req.body;
 
-      const { paginate } = request
-      
-      if (paginate) {
-        const _req = /** @type {PaginatedTransactionsRequest} */ (request)
-
-        /**
+      /**
          * @type {PaginatedTransactionsResponse}
          */
         const _res = getListPage({
           entries: TRANSACTIONS,
-          itemsPerPage: _req.itemsPerPage,
-          page: _req.page
+          itemsPerPage: request.itemsPerPage,
+          page: request.page
         })
 
-        return res.status(200).json(_res)
-      } else {
-        return res.status(200).json({
-          transactions: TRANSACTIONS
-        })
-      }
+        return res.status(200).json(_res)      
     } catch (e) {
       return res.status(500).json({
         errorMessage: e.message
