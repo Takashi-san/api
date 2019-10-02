@@ -172,11 +172,27 @@ const FAIL = false
  */
 
 /**
- * https://api.lightning.community/#grpc-request-listpaymentsrequest
+ * Not supported as of commit ed93a9e5c3915e1ccf6f76f0244466e999dbc939 .
  * @typedef {object} ListPaymentsRequest
  * @prop {boolean=} include_incomplete If true, then return payments that have
  * not yet fully completed. This means that pending payments, as well as failed
  * payments will show up if this field is set to True.
+ */
+
+/**
+ * NOT based on any lightning API.
+ * @typedef {object} PaginatedListPaymentsRequest
+ * @prop {number} page
+ * @prop {true} paginate
+ * @prop {number} itemsPerPage
+ */
+
+/**
+ * @typedef {object} PaginatedListPaymentsResponse
+ * @prop {Payment[]} content
+ * @prop {number} page
+ * @prop {number} totalPages
+ * @prop {number} totalItems
  */
 
 /**
@@ -217,6 +233,24 @@ const TRANSACTIONS = [{
   time_stamp: Date.now(),
   total_fees: 1,
   tx_hash: 'tx_hash'
+}];
+
+/**
+ * @type {Payment[]}
+ */
+const PAYMENTS = [{
+    creation_date: Date.now(),
+    fee: 1,
+    fee_msat: 1000,
+    fee_sat: 1,
+    path: ['path1', 'path2'],
+    payment_hash: 'payment_hash',
+    payment_preimage: 'payment_preimage',
+    payment_request: 'payment_request',
+    status: 2,
+    value: 100,
+    value_msat: 100000,
+    value_sat: 100,
 }]
 
 let channel_point;
@@ -659,20 +693,25 @@ module.exports = (
 
   // get lnd node payments list
   app.get("/api/lnd/listpayments", (req, res) => {
-    const { itemsPerPage, page, paginate = true } = req.body;
-    lightning.listPayments({}, async (err, { payments = [] } = {}) => {
-      if (err) {
-        logger.debug("ListPayments Error:", err);
-        handleError(res, err);
-      } else {
-        logger.debug("ListPayments:", payments);
-        if (paginate) {
-          res.json(getListPage({ entries: payments, itemsPerPage, page }));
-        } else {
-          res.json({ payments });
-        }
-      }
-    });
+    try {
+      /** @type {PaginatedListPaymentsRequest} */
+      const request = req.body;
+
+      /**
+       * @type {PaginatedListPaymentsResponse}
+       */
+      const _res = getListPage({
+        entries: PAYMENTS,
+        itemsPerPage: request.itemsPerPage,
+        page: request.page
+      })
+
+      return res.status(200).json(_res)
+    } catch (e) {
+      return res.status(500).json({
+        errorMessage: e.message
+      })
+    }
   });
 
   // get lnd node invoices list
@@ -1135,7 +1174,6 @@ module.exports = (
         errorMessage: e.message
       })
     }
-    
   });
 
   app.post("/api/lnd/sendmany", (req, res) => {
