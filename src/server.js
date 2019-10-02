@@ -85,13 +85,11 @@ const server = async program => {
           next();
         } else {
           try {
-            auth.validateToken(req.headers.authorization).then(response => {
-              if (response.valid) {
-                next();
-              } else {
-                res.status(401).json({ message: "Please log in" });
-              }
-            });
+            if (req.headers.authorization === 'token') {
+              next()
+            } else {
+              return res.status(401).json({ errorMessage: 'Invalid Token' })
+            }
           } catch (e) {
             res.status(401).json({ message: "Please log in" });
           }
