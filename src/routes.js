@@ -196,31 +196,6 @@ const FAIL = false
  */
 
 /**
- * https://api.lightning.community/#grpc-request-listinvoicerequest
- * @typedef {object} ListInvoiceRequest
- * @prop {boolean=} pending_only If set, only unsettled invoices will be returned
- * in the response.
- * @prop {number=} index_offset The index of an invoice that will be used as
- * either the start or end of a query to determine which invoices should be
- * returned in the response.
- * @prop {number=} num_max_invoices The max number of invoices to return in the
- * response to this query.
- * @prop {boolean=} reversed If set, the invoices returned will result from
- * seeking backwards from the specified index offset. This can be used to
- * paginate backwards.
- */
-
-/**
- * @typedef {object} ListInvoiceResponse
- * @prop {Invoice[]} invoices A list of invoices from the time slice of the time
- * series specified in the request.
- * @prop {number} last_index_offset The index of the last item in the set of
- * returned invoices.This can be used to seek further, pagination style.
- * @prop {number} first_index_offset The index of the last item in the set of
- * returned invoices. This can be used to seek backwards, pagination style.
- */
-
-/**
  * @type {Transaction[]}
  */
 const TRANSACTIONS = [{
@@ -251,6 +226,31 @@ const PAYMENTS = [{
     value: 100,
     value_msat: 100000,
     value_sat: 100,
+}]
+
+/** @type {Invoice[]} */
+const INVOICES = [{
+  add_index: 1,
+  amt_paid: 100,
+  amt_paid_msat: 100000,
+  amt_paid_sat: 100,
+  cltv_expiry: 1,
+  creation_date: Date.now(),
+  description_hash: 'description_hash',
+  expiry: 3600,
+  fallback_addr: 'fallback_addr',
+  memo: 'memo',
+  payment_request: 'payment_request',
+  private: false,
+  r_hash: 'r_hash',
+  r_preimage: 'r_preimage',
+  receipt: 'receipt',
+  route_hints: [{ hop_hints: [{ chan_id: 1, cltv_expiry_delta: 1, fee_base_msat: 100000, fee_proportional_millionths: 1000000000000, node_id: 'node_id' }] }],
+  settle_date: Date.now(),
+  settle_index: 1,
+  settled: true,
+  state: 1,
+  value: 100
 }]
 
 let channel_point;
@@ -716,33 +716,39 @@ module.exports = (
 
   // get lnd node invoices list
   app.get("/api/lnd/listinvoices", (req, res) => {
-    const { page, itemsPerPage, reversed = true } = req.body;
-    const offset = (page - 1) * itemsPerPage;
-    const limit = page * itemsPerPage;
-    lightning.listInvoices(
-      { reversed, index_offset: offset, num_max_invoices: itemsPerPage },
-      async (err, { invoices, last_index_offset }) => {
-        if (err) {
-          logger.debug("ListInvoices Error:", err);
-          const health = await checkHealth();
-          if (health.LNDStatus.success) {
-            err.error = err.message;
-            res.send({ message: err.message, success: false });
-          } else {
-            res.status(500);
-            res.send({ message: health.LNDStatus.message, success: false });
-          }
-        } else {
-          logger.debug("ListInvoices:", response);
-          res.json({
-            entries: invoices,
-            page,
-            totalPages: Math.ceil(last_index_offset / itemsPerPage),
-            success: true
-          });
-        }
+    try {
+      /**
+     * NOT based on any lightning API.
+     * @typedef {object} PaginatedListInvoicesRequest
+     * @prop {number} itemsPerPage
+     * @prop {number} page
+     */
+
+    /**
+     * NOT based on any lightning API.
+     * @typedef {object} PaginatedListInvoicesResponse
+     * @prop {Invoice[]} entries
+     * @prop {number} page
+     * @prop {number} totalPages
+      */
+      
+      /** @type {PaginatedListInvoicesRequest} */
+      const request = req.body
+      const { page, itemsPerPage } = request;
+
+      /** @type {PaginatedListInvoicesResponse} */
+      const _res = {
+        entries: INVOICES,
+        page: 1,
+        totalPages: 1
       }
-    );
+
+      return res.status(200).json(_res)
+    } catch (e) {
+      return res.status(500).json({
+        errorMessage: e.message
+      })
+   }
   });
 
   // get lnd node forwarding history
