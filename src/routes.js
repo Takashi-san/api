@@ -531,23 +531,11 @@ module.exports = (
 
   // get the lnd node wallet balance
   app.get("/api/lnd/walletbalance", (req, res) => {
-    lightning.walletBalance({}, function(err, response) {
-      if (err) {
-        logger.debug("WalletBalance Error:", err);
-        return checkHealth().then(health => {
-          if (health.LNDStatus.success) {
-            err.error = err.message;
-            res.send(err);
-          } else {
-            res.status(500);
-            res.send({ errorMessage: "LND is down" });
-          }
-        });
-      } else {
-        logger.debug("WalletBalance:", response);
-        res.json(response);
-      }
-    });
+    return res.status(200).json({
+      total_balance: 200,
+      confirmed_balance: 100,
+      unconfirmed_balance: 100,
+    })
   });
 
   // get the lnd node channel balance
