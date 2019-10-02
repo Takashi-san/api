@@ -39,6 +39,36 @@ const FAIL = false
  */
 
 /**
+ * NOT based on any lightning API. Not supported by API as of commit
+ * ed93a9e5c3915e1ccf6f76f0244466e999dbc939 .
+ * @typedef {object} NonPaginatedTransactionsRequest
+ * @prop {false} paginate
+ */
+
+/**
+ * NOT based on any lightning API.
+ * @typedef {object} PaginatedTransactionsRequest
+ * @prop {number} page
+ * @prop {true} paginate
+ * @prop {number} itemsPerPage
+ */
+
+/**
+ * https://api.lightning.community/#grpc-response-transactiondetails . Not
+ * supported as of commit ed93a9e5c3915e1ccf6f76f0244466e999dbc939 .
+ * @typedef {object} NonPaginatedTransactionsResponse
+ * @prop {Transaction[]} transactions
+ */
+
+/**
+ * @typedef {object} PaginatedTransactionsResponse
+ * @prop {Transaction[]} content
+ * @prop {number} page
+ * @prop {number} totalPages
+ * @prop {number} totalItems
+ */
+
+/**
  * https://api.lightning.community/#payment
  * @typedef {object} Payment
  * @prop {string} payment_hash  The payment hash
@@ -173,6 +203,21 @@ const FAIL = false
  * @prop {number} first_index_offset The index of the last item in the set of
  * returned invoices. This can be used to seek backwards, pagination style.
  */
+
+/**
+ * @type {Transaction[]}
+ */
+const TRANSACTIONS = [{
+  amount: 100,
+  block_hash: 'block_hash',
+  block_height: 5,
+  dest_addresses: ['dest_address1', 'dest_address2'],
+  num_confirmations: 6,
+  raw_tx_hex: 'raw_tx_hex',
+  time_stamp: Date.now(),
+  total_fees: 1,
+  tx_hash: 'tx_hash'
+}]
 
 let channel_point;
 // module.exports = (app) => {
@@ -1061,19 +1106,36 @@ module.exports = (
   });
 
   app.get("/api/lnd/transactions", (req, res) => {
-    const { page, paginate = true, itemsPerPage } = req.body;
-    lightning.getTransactions({}, async (err, { transactions = [] } = {}) => {
-      if (err) {
-        return handleError(res, err);
+    try {
+      /** @type {NonPaginatedTransactionsRequest&PaginatedTransactionsRequest} */
+      const request = req.body;
+
+      const { paginate } = request
+      
+      if (paginate) {
+        const _req = /** @type {PaginatedTransactionsRequest} */ (request)
+
+        /**
+         * @type {PaginatedTransactionsResponse}
+         */
+        const _res = getListPage({
+          entries: TRANSACTIONS,
+          itemsPerPage: _req.itemsPerPage,
+          page: _req.page
+        })
+
+        return res.status(200).json(_res)
       } else {
-        logger.debug("Transactions:", transactions);
-        if (paginate) {
-          res.json(getListPage({ entries: transactions, itemsPerPage, page }));
-        } else {
-          res.json({ transactions });
-        }
+        return res.status(200).json({
+          transactions: TRANSACTIONS
+        })
       }
-    });
+    } catch (e) {
+      return res.status(500).json({
+        errorMessage: e.message
+      })
+    }
+    
   });
 
   app.post("/api/lnd/sendmany", (req, res) => {
