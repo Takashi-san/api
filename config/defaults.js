@@ -1,4 +1,5 @@
 const os = require("os");
+const path = require("path");
 const platform = os.platform();
 const homeDir = os.homedir();
 
