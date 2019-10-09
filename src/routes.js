@@ -604,7 +604,7 @@ module.exports = (
                   page
                 }),
                 invoices: {
-                  entries: invoices,
+                  content: invoices,
                   page,
                   totalPages: Math.ceil(last_index_offset / itemsPerPage),
                   totalItems: last_index_offset
@@ -656,7 +656,7 @@ module.exports = (
         } else {
           logger.debug("ListInvoices:", response);
           res.json({
-            entries: invoices,
+            content: invoices,
             page,
             totalPages: Math.ceil(last_index_offset / itemsPerPage),
             success: true
