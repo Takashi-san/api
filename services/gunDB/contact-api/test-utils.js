@@ -5,7 +5,7 @@ import { createMockGun } from "./__mocks__/mock-gun";
 import * as Jobs from "./jobs";
 import * as Key from "./key";
 import * as Schema from "./schema";
-Schema.isChatMessage; // avoid unused import tytpescript error
+Schema.isChatMessage; // avoid unused import typescript error
 
 // @ts-ignore
 require("gun/sea");

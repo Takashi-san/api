@@ -708,6 +708,27 @@ module.exports = (
     });
   });
 
+  app.post("/api/lnd/decodePayReq", (req, res) => {
+    const { payReq } = req.body;
+    lightning.decodePayReq({ pay_req: payReq }, async (err, paymentRequest) => {
+      if (err) {
+        logger.debug("DecodePayReq Error:", err);
+        const health = await checkHealth();
+        if (health.LNDStatus.success) {
+          err.error = err.message;
+          res.status(400).send(err);
+        } else {
+          res.status(500).send({ errorMessage: "LND is down" });
+        }
+      } else {
+        logger.debug("DecodePayReq:", response);
+        res.json({
+          decodedRequest: paymentRequest
+        });
+      }
+    });
+  });
+
   // get the lnd node channel balance
   app.get("/api/lnd/channelbalance", (req, res) => {
     lightning.channelBalance({}, function(err, response) {
