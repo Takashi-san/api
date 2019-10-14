@@ -517,7 +517,8 @@ const isRegistering = () => _isRegistering;
 const authenticate = (alias, pass) => {
   return new Promise((res, rej) => {
     if (isAuthenticated()) {
-      throw new Error("Cannot re-authenticate.");
+      res(user.is.pub)
+      return
     }
 
     if (isAuthenticating()) {
@@ -526,10 +527,12 @@ const authenticate = (alias, pass) => {
       );
     }
 
+
     _isAuthenticating = true;
 
     user.auth(alias, pass, ack => {
       _isAuthenticating = false;
+
 
       if (typeof ack !== "object" || ack === null) {
         rej(new Error("Unknown error."));
