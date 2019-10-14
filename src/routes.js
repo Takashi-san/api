@@ -654,7 +654,7 @@ module.exports = (
             res.send({ message: health.LNDStatus.message, success: false });
           }
         } else {
-          logger.debug("ListInvoices:", response);
+          // logger.debug("ListInvoices:", response);
           res.json({
             content: invoices,
             page,
