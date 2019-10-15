@@ -279,14 +279,14 @@ module.exports = (
   app.post("/api/lnd/wallet", (req, res) => {
     const { password, alias } = req.body;
     if (!alias) {
-      return req.status(400).json({
+      return res.status(400).json({
         field: "alias",
         message: "Please specify an alias for your new wallet"
       });
     }
 
     if (!password) {
-      return req.status(400).json({
+      return res.status(400).json({
         field: "password",
         message: "Please specify a password for your new wallet"
       });
