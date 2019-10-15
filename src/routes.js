@@ -188,7 +188,7 @@ module.exports = (
         return true;
       } else {
         res.status(500);
-        res.send({ field: "health", message: health.LNDStatus.message.split('UNKNOWN: '), success: false });
+        res.send({ field: "health", message: health.LNDStatus.message.split('UNKNOWN: ').slice(1).join(''), success: false });
         return false;
       }
     } catch (err) {
