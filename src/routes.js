@@ -598,7 +598,7 @@ module.exports = (
   });
 
   app.get("/api/lnd/unifiedTrx", (req, res) => {
-    const { itemsPerPage, page, reversed = true } = req.body;
+    const { itemsPerPage, page, reversed = true } = req.query;
     const offset = (page - 1) * itemsPerPage;
     lightning.listPayments({}, async (err, { payments = [] } = {}) => {
       if (err) {
@@ -646,7 +646,7 @@ module.exports = (
 
   // get lnd node payments list
   app.get("/api/lnd/listpayments", (req, res) => {
-    const { itemsPerPage, page, paginate = true } = req.body;
+    const { itemsPerPage, page, paginate = true } = req.query;
     lightning.listPayments({}, async (err, { payments = [] } = {}) => {
       if (err) {
         logger.debug("ListPayments Error:", err);
@@ -664,7 +664,7 @@ module.exports = (
 
   // get lnd node invoices list
   app.get("/api/lnd/listinvoices", (req, res) => {
-    const { page, itemsPerPage, reversed = true } = req.body;
+    const { page, itemsPerPage, reversed = true } = req.query;
     const offset = (page - 1) * itemsPerPage;
     const limit = page * itemsPerPage;
     lightning.listInvoices(
@@ -1126,7 +1126,7 @@ module.exports = (
   });
 
   app.get("/api/lnd/transactions", (req, res) => {
-    const { page, paginate = true, itemsPerPage } = req.body;
+    const { page, paginate = true, itemsPerPage } = req.query;
     lightning.getTransactions({}, async (err, { transactions = [] } = {}) => {
       if (err) {
         return handleError(res, err);
