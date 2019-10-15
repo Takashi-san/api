@@ -30,38 +30,61 @@ module.exports = (
   mySocketsEvents,
   { serverHost, serverPort }
 ) => {
-  const checkHealth = () => {
-    return new Promise((resolve, reject) => {
-      lightning.getInfo({}, async (err, response) => {
-        const LNDStatus = {
-          message: err ? err.details : "Success",
-          success: !err
-        };
-        try {
-          const APIHealth = await Http.get(
-            `http://localhost:${serverPort}/ping`
-          );
-          const APIStatus = {
-            message: APIHealth.data,
-            responseTime: APIHealth.headers["x-response-time"],
-            success: true
-          };
-          resolve({
-            LNDStatus,
-            APIStatus
-          });
-        } catch (err) {
-          const APIStatus = {
-            message: err.response.data,
-            responseTime: APIHealth.headers["x-response-time"],
-            success: false
-          };
-          resolve({
-            LNDStatus,
-            APIStatus
-          });
+  const getWalletUnlockerStatus = (resolve, reject) => {
+    walletUnlocker.getInfo({}, async (err, response) => {
+      if (err) {
+        console.error(err);
+        resolve({ service: "walletUnlocker", message: err.message, walletStatus: "locked", success: false });
+        return;
+      }
+
+      resolve({ service: "walletUnlocker", message: response, walletStatus: "locked", success: true });
+    });
+  };
+
+  const getAvailableService = () => new Promise((resolve, reject) => {
+    lightning.getInfo({}, async (err, response) => {
+      if (err) {
+        console.error(err);
+        if (err.message.includes("unknown service lnrpc.Lightning")) {
+          resolve({ service: "walletUnlocker", message: "Wallet locked", walletStatus: "locked", success: true })
+        } else {
+          resolve({ service: "lightning", message: err.message, walletStatus: "unlocked", success: false })
         }
-      });
+      }
+
+      resolve({ service: "lightning", message: response, walletStatus: "unlocked", success: true });
+    });
+  });
+
+  const checkHealth = () => {
+    return new Promise(async (resolve, reject) => {
+      const serviceStatus = await getAvailableService();
+      const LNDStatus = serviceStatus;
+      try {
+        const APIHealth = await Http.get(
+          `http://localhost:${serverPort}/ping`
+        );
+        const APIStatus = {
+          message: APIHealth.data,
+          responseTime: APIHealth.headers["x-response-time"],
+          success: true
+        };
+        resolve({
+          LNDStatus,
+          APIStatus
+        });
+      } catch (err) {
+        const APIStatus = {
+          message: err.response.data,
+          responseTime: APIHealth.headers["x-response-time"],
+          success: false
+        };
+        resolve({
+          LNDStatus,
+          APIStatus
+        });
+      }
     });
   };
 
@@ -83,17 +106,26 @@ module.exports = (
 
   const unlockWallet = password =>
     new Promise((resolve, reject) => {
-      const args = {
-        wallet_password: Buffer.from(password, "utf-8")
-      };
-      walletUnlocker.unlockWallet(args, function(unlockErr, unlockResponse) {
-        if (unlockErr) {
-          reject(unlockErr);
-          return;
+      try {
+        const args = {
+          wallet_password: Buffer.from(password, "utf-8")
+        };
+        walletUnlocker.unlockWallet(args, function(unlockErr, unlockResponse) {
+          if (unlockErr) {
+            reject(unlockErr);
+            return;
+          }
+  
+          resolve(unlockResponse);
+        });
+      } catch(err) {
+        console.error(err);
+        if (err.message === "unknown service lnrpc.WalletUnlocker") {
+          resolve({
+            message: "Wallet already unlocked"
+          });
         }
-
-        resolve(unlockResponse);
-      });
+      }
     });
 
   app.use(["/ping"], responseTime());
@@ -119,11 +151,6 @@ module.exports = (
     res.send("OK");
   });
 
-  app.get("/api/lnd/connect", (req, res) => {
-    res.status(200);
-    res.json({});
-  });
-
   app.post("/api/mobile/error", (req, res) => {
     console.log(JSON.stringify(req.body));
     res.json({ msg: OK });
@@ -139,7 +166,7 @@ module.exports = (
 
         await recreateLnServices();
 
-        if (walletUnlocker) {
+        if (health.LNDStatus.walletStatus === "locked") {
           await unlockWallet(password);
         }
 

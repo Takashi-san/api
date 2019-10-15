@@ -1,3 +1,4 @@
+// @ts-ignore
 const dotenv = require("dotenv");
 
 dotenv.config();
