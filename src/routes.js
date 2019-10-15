@@ -347,31 +347,38 @@ module.exports = (
               `Waiting for admin.macaroon to be created. Seconds passed: ${seconds}`
             );
             setTimeout(async () => {
-              if (!fs.existsSync(lnServicesData.macaroonPath)) {
-                return waitUntilFileExists(seconds + 1);
-              }
-
-              logger.debug("admin.macaroon file created");
-
-              mySocketsEvents.emit("updateLightning");
-              const lnServices = await require("../services/lnd/lightning")(
-                lnServicesData.lndProto,
-                lnServicesData.lndHost,
-                lnServicesData.lndCertPath,
-                lnServicesData.macaroonPath
-              );
-              lightning = lnServices.lightning;
-              walletUnlocker = lnServices.walletUnlocker;
-              const token = await auth.generateToken();
-              const publicKey = await GunDB.register(alias, password);
-              return res.json({
-                mnemonicPhrase: mnemonicPhrase,
-                authorization: token,
-                user: {
-                  alias,
-                  publicKey
+              try {
+                if (!fs.existsSync(lnServicesData.macaroonPath)) {
+                  return waitUntilFileExists(seconds + 1);
                 }
-              });
+  
+                logger.debug("admin.macaroon file created");
+  
+                mySocketsEvents.emit("updateLightning");
+                const lnServices = await require("../services/lnd/lightning")(
+                  lnServicesData.lndProto,
+                  lnServicesData.lndHost,
+                  lnServicesData.lndCertPath,
+                  lnServicesData.macaroonPath
+                );
+                lightning = lnServices.lightning;
+                walletUnlocker = lnServices.walletUnlocker;
+                const token = await auth.generateToken();
+                const publicKey = await GunDB.register(alias, password);
+                return res.json({
+                  mnemonicPhrase: mnemonicPhrase,
+                  authorization: token,
+                  user: {
+                    alias,
+                    publicKey
+                  }
+                });
+              } catch(err) {
+                res.status(400).json({
+                  field: "unknown",
+                  message: err.message
+                });
+              }
             }, 1000);
           };
 
