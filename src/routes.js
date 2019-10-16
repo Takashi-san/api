@@ -755,7 +755,7 @@ module.exports = (
           res.status(500).send({ errorMessage: "LND is down" });
         }
       } else {
-        logger.debug("DecodePayReq:", response);
+        // logger.debug("DecodePayReq:", response);
         res.json({
           decodedRequest: paymentRequest
         });
