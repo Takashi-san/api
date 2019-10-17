@@ -133,32 +133,57 @@ const __encryptAndPutResponseToRequest = async (
  * @returns {Promise<string>}
  */
 const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
-  if (!user.is) {
-    throw new Error(ErrorCode.NOT_AUTH);
-  }
-
-  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
-  const encryptedForMeRecipientPub = await SEA.encrypt(withPublicKey, mySecret);
-
-  /** @type {PartialOutgoing} */
-  const newPartialOutgoingFeed = {
-    with: encryptedForMeRecipientPub
-  };
-
-  /** @type {GUNNode} */
-  const outgoingFeed = await new Promise((res, rej) => {
-    const outFeed = user.get(Key.OUTGOINGS).set(newPartialOutgoingFeed, ack => {
-      if (ack.err) {
-        rej(new Error(ack.err));
-      } else {
-        res(outFeed);
-      }
-    });
-  });
-
-  const outgoingFeedID = /** @type {string} */ (outgoingFeed._.get);
-
   try {
+    if (!user.is) {
+      throw new Error(ErrorCode.NOT_AUTH);
+    }
+    const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+    const encryptedForMeRecipientPub = await SEA.encrypt(
+      withPublicKey,
+      mySecret
+    );
+
+    /** @type {PartialOutgoing} */
+    const newPartialOutgoingFeed = {
+      with: encryptedForMeRecipientPub
+    };
+
+    console.warn(
+      `typeof encryptedForMeRecipientPub: ${typeof encryptedForMeRecipientPub}`
+    );
+    console.warn(
+      `typeof newPartialOutgoingFeed.with: ${typeof newPartialOutgoingFeed.with}`
+    );
+
+    /** @type {GUNNode} */
+    const outgoingFeedObj = await new Promise((res, rej) => {
+      const outFeed = user
+        .get(Key.OUTGOINGS)
+        .set(newPartialOutgoingFeed, ack => {
+          if (ack.err) {
+            rej(new Error(ack.err));
+          } else {
+            res(outFeed);
+          }
+        });
+    });
+
+    console.warn("--------------------------------");
+    console.warn(
+      `typeof outgoingFeedObj._.get: ${typeof outgoingFeedObj._.get} && ${
+        outgoingFeedObj._.get
+      }`
+    );
+    console.warn("--------------------------------");
+
+    const outgoingFeedID = /** @type {string} */ (outgoingFeedObj._.get);
+
+    const outgoingFeed = user.get(Key.OUTGOINGS).get(outgoingFeedID);
+
+    console.warn("--------------------------------");
+    console.warn(`typeof outgoingFeed.get: ${typeof outgoingFeed.get}`);
+    console.warn("--------------------------------");
+
     await new Promise((res, rej) => {
       outgoingFeed.get(Key.MESSAGES).set(__createInitialMessage(), ack => {
         if (ack.err) {
@@ -168,13 +193,21 @@ const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
         }
       });
     });
+
+    console.warn("--------------------------------");
+    console.warn(
+      `after outgoingFeed.get(KEY.MESSAGES.set) and before returning outgoingFeedID: ${outgoingFeedID}`
+    );
+    console.warn("--------------------------------");
+
+    return outgoingFeedID;
   } catch (e) {
     console.warn(
       `Got an error ${e.message} setting the initial message on an outgoing feed. Will now try to null out the outgoing feed...`
     );
-  }
 
-  return outgoingFeedID;
+    throw e;
+  }
 };
 
 /**
@@ -484,12 +517,19 @@ const sendHandshakeRequest = async (
     SEA
   );
 
+  console.log(
+    `outgoingFeedID from __createOUtgoingFeed: ${typeof outgoingFeedID} && ${outgoingFeedID}`
+  );
+
   const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
   const encryptedForMeRecipientPublicKey = await SEA.encrypt(
     recipientPublicKey,
     mySecret
   );
   const encryptedForMeOutgoingID = await SEA.encrypt(outgoingFeedID, mySecret);
+
+  console.warn(`typeof encryptedForMeOutgoingID: ${encryptedForMeOutgoingID}`);
+  console.warn(encryptedForMeOutgoingID);
 
   await new Promise((res, rej) => {
     user
@@ -536,6 +576,8 @@ const sendHandshakeRequest = async (
 
   const secret = await SEA.secret(recipientEpub, user._.sea);
   const encryptedOutgoingFeedID = await SEA.encrypt(outgoingFeedID, secret);
+
+  console.warn(`typeof encryptedOutgoingFeedID: ${encryptedOutgoingFeedID}`);
 
   /** @type {HandshakeRequest} */
   const handshakeRequestData = {
