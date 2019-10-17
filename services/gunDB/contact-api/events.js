@@ -740,18 +740,50 @@ const onSimplerReceivedRequests = (cb, gun, user, SEA) => {
         return;
       }
 
-      const requestorEpub = await new Promise(res =>
+      const requestorEpub = await new Promise((res, rej) =>
         gun
           .user(req.from)
           .get("epub")
-          .once(res)
+          .once(epub => {
+            if (typeof epub !== "string") {
+              rej(
+                new Error("Expected gun.user(pub).get(epub) to be an string.")
+              );
+            } else {
+              if (epub.length === 0) {
+                rej(
+                  new Error(
+                    "Expected gun.user(pub).get(epub) to be a populated string."
+                  )
+                );
+              }
+              res(epub);
+            }
+          })
       );
+
+      console.log("------------------------------");
+      console.log(`requestorEpub: ${requestorEpub}`);
+      console.log("------------------------------");
+
+      console.log("------------------------------");
+      console.log(`req: ${JSON.stringify(req)}`);
+      console.log("------------------------------");
+
+      console.log("------------------------------");
+      console.log(`user._.sea: ${JSON.stringify(user._.sea)}`);
+      console.log("------------------------------");
 
       const ourSecret = await SEA.secret(requestorEpub, user._.sea);
       const decryptedResponse = await SEA.decrypt(req.response, ourSecret);
 
+      console.log("------------------------------");
       console.log(`encryptedResponse: ${req.response}`);
+      console.log("------------------------------");
+
+      console.log("------------------------------");
       console.log(`decryptedResponse: ${decryptedResponse}`);
+      console.log("------------------------------");
 
       if (!idToReceivedRequest[reqID]) {
         idToReceivedRequest[reqID] = {
