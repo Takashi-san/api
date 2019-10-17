@@ -2,9 +2,54 @@ const Gun = require("gun");
 const debounce = require("lodash/debounce");
 const once = require("lodash/once");
 
+
 /** @type {import('../contact-api/SimpleGUN').ISEA} */
 // @ts-ignore
-const SEA = require("gun/sea");
+const SEAx = require("gun/sea");
+
+/** @type {import('../contact-api/SimpleGUN').ISEA} */
+const mySEA = {}
+
+
+mySEA.encrypt = (msg, secret) => {
+  if (typeof msg !== 'string') {
+    console.warn('---------------')
+    console.warn(`msg to encrypt not an string: ${typeof msg}`)
+    console.warn(msg)
+    console.warn('---------------')
+
+    return SEAx.encrypt(msg, secret)
+  }
+
+  console.warn('------')
+    console.warn(`msg to encrypt an string: ${msg}`)
+    console.warn('------')
+
+  return SEAx.encrypt(msg, secret).then(encMsg => {
+    return '$$__SHOCKWALLET__' + encMsg
+  })
+}
+
+mySEA.decrypt = (encMsg, secret) => {
+  if (typeof encMsg !== 'string') {
+    console.warn('---------------')
+    console.warn('encMsg to decrypt not an string: ' + typeof encMsg)
+    console.warn(encMsg)
+    console.warn('---------------')
+
+    return SEAx.decrypt(encMsg, secret)
+  } else {
+    console.warn('---------------')
+    console.warn('encMsg to decrypt an string: ' +  encMsg)
+    console.warn('---------------')
+
+    return SEAx.decrypt(encMsg.slice('$$__SHOCKWALLET__'.length), secret)
+  }
+}
+
+mySEA.secret = (a, b) => {
+  return SEAx.secret(a, b)
+}
 
 const auth = require("../../auth/auth");
 
@@ -112,7 +157,7 @@ class Mediator {
 
       await throwOnInvalidToken(token);
 
-      await API.Actions.acceptRequest(requestID, gun, user, SEA);
+      await API.Actions.acceptRequest(requestID, gun, user, mySEA);
 
       this.socket.emit(Action.ACCEPT_REQUEST, {
         ok: true,
@@ -134,7 +179,7 @@ class Mediator {
         ),
         gun,
         user,
-        SEA
+        mySEA
       );
     } catch (e) { console.log(e);
       this.socket.emit(Action.ACCEPT_REQUEST, {
@@ -213,7 +258,7 @@ class Mediator {
         recipientPublicKey,
         gun,
         user,
-        SEA
+        mySEA
       );
 
       this.socket.emit(Action.SEMD_HANDSHAKE_REQUEST, {
@@ -239,7 +284,7 @@ class Mediator {
 
       await throwOnInvalidToken(token);
 
-      await API.Actions.sendMessage(recipientPublicKey, body, gun, user, SEA);
+      await API.Actions.sendMessage(recipientPublicKey, body, gun, user, mySEA);
 
       this.socket.emit(Action.SEND_MESSAGE, {
         ok: true,
@@ -376,7 +421,7 @@ class Mediator {
         },
         gun,
         user,
-        SEA
+        mySEA
       );
     } catch (e) { console.log(e);
       this.socket.emit(Event.ON_CHATS, {
@@ -456,7 +501,7 @@ class Mediator {
         },
         gun,
         user,
-        SEA
+        mySEA
       );
     } catch (e) { console.log(e);
       this.socket.emit(Event.ON_RECEIVED_REQUESTS, {
@@ -486,7 +531,7 @@ class Mediator {
         },
         gun,
         user,
-        SEA
+        mySEA
       );
     } catch (e) { console.log(e);
       this.socket.emit(Event.ON_SENT_REQUESTS, {
