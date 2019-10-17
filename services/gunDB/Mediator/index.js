@@ -136,7 +136,7 @@ class Mediator {
         user,
         SEA
       );
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Action.ACCEPT_REQUEST, {
         ok: false,
         msg: e.message,
@@ -161,7 +161,7 @@ class Mediator {
         msg: null,
         origBody: body
       });
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Action.BLACKLIST, {
         ok: false,
         msg: e.message,
@@ -190,7 +190,7 @@ class Mediator {
         msg: null,
         origBody: body
       });
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Action.GENERATE_NEW_HANDSHAKE_NODE, {
         ok: false,
         msg: e.message,
@@ -221,7 +221,7 @@ class Mediator {
         msg: null,
         origBody: body
       });
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Action.SEMD_HANDSHAKE_REQUEST, {
         ok: false,
         msg: e.message,
@@ -246,7 +246,7 @@ class Mediator {
         msg: null,
         origBody: reqBody
       });
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Action.SEND_MESSAGE, {
         ok: false,
         msg: e.message,
@@ -271,7 +271,7 @@ class Mediator {
         msg: null,
         origBody: body
       });
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Action.SET_AVATAR, {
         ok: false,
         msg: e.message,
@@ -296,7 +296,7 @@ class Mediator {
         msg: null,
         origBody: body
       });
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Action.SET_DISPLAY_NAME, {
         ok: false,
         msg: e.message,
@@ -323,7 +323,7 @@ class Mediator {
           origBody: body
         });
       }, user);
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Event.ON_AVATAR, {
         ok: false,
         msg: e.message,
@@ -348,7 +348,7 @@ class Mediator {
           origBody: body
         });
       }, user);
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Event.ON_BLACKLIST, {
         ok: false,
         msg: e.message,
@@ -378,7 +378,7 @@ class Mediator {
         user,
         SEA
       );
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Event.ON_CHATS, {
         ok: false,
         msg: e.message,
@@ -403,7 +403,7 @@ class Mediator {
           origBody: body
         });
       }, user);
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Event.ON_DISPLAY_NAME, {
         ok: false,
         msg: e.message,
@@ -428,7 +428,7 @@ class Mediator {
           origBody: body
         });
       }, user);
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Event.ON_HANDSHAKE_ADDRESS, {
         ok: false,
         msg: e.message,
@@ -458,7 +458,7 @@ class Mediator {
         user,
         SEA
       );
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Event.ON_RECEIVED_REQUESTS, {
         msg: e.message,
         ok: false,
@@ -488,7 +488,7 @@ class Mediator {
         user,
         SEA
       );
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Event.ON_SENT_REQUESTS, {
         msg: e.message,
         ok: false,
