@@ -148,12 +148,21 @@ const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
       with: encryptedForMeRecipientPub
     };
 
+    console.warn('--------------------')
     console.warn(
       `typeof encryptedForMeRecipientPub: ${typeof encryptedForMeRecipientPub}`
     );
+    console.warn('--------------------')
+
+    console.warn('--------------------')
     console.warn(
       `typeof newPartialOutgoingFeed.with: ${typeof newPartialOutgoingFeed.with}`
     );
+    console.warn('--------------------')
+
+    console.warn('--------------------')
+      console.warn(`newPartialOutgoingFeed.with: ${newPartialOutgoingFeed.with}`)
+    console.warn('--------------------')
 
     /** @type {GUNNode} */
     const outgoingFeedObj = await new Promise((res, rej) => {
@@ -169,14 +178,17 @@ const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
     });
 
     console.warn("--------------------------------");
+    console.warn('outgoingFeedObj:')
+    console.warn(outgoingFeedObj)
+    console.warn("--------------------------------");
     console.warn(
-      `typeof outgoingFeedObj._.get: ${typeof outgoingFeedObj._.get} && ${
-        outgoingFeedObj._.get
+      `typeof outgoingFeedObj._['#']: ${typeof outgoingFeedObj._['#']} && ${
+        outgoingFeedObj._['#']
       }`
     );
     console.warn("--------------------------------");
 
-    const outgoingFeedID = /** @type {string} */ (outgoingFeedObj._.get);
+    const outgoingFeedID = /** @type {string} */ (outgoingFeedObj._['#']);
 
     const outgoingFeed = user.get(Key.OUTGOINGS).get(outgoingFeedID);
 
@@ -601,7 +613,7 @@ const sendHandshakeRequest = async (
   });
 
   const encryptedForMeRequestID = await SEA.encrypt(
-    /** @type {string} */ (handshakeRequest._.get),
+    /** @type {string} */ (handshakeRequest._['#']),
     mySecret
   );
 
