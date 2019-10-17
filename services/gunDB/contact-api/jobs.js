@@ -51,7 +51,7 @@ exports.onAcceptedRequests = async (
     for (const [reqKey, req] of Object.entries(sentRequests)) {
       try {
         /** @type {string|undefined} */
-        const recipientPub = await new Promise((res, rej) => {
+        const encryptedForMeRecipientPub = await new Promise((res, rej) => {
           user
             .get(Key.REQUEST_TO_USER)
             .get(reqKey)
@@ -79,9 +79,14 @@ exports.onAcceptedRequests = async (
             });
         });
 
-        if (typeof recipientPub === "undefined") {
+        if (typeof encryptedForMeRecipientPub === "undefined") {
           throw new TypeError("typeof recipientPub === 'undefined'");
         }
+
+        const recipientPub = await SEA.decrypt(
+          encryptedForMeRecipientPub,
+          mySecret
+        );
 
         /** @type {string} */
         const recipientEpub = await new Promise((res, rej) => {
@@ -92,7 +97,8 @@ exports.onAcceptedRequests = async (
               if (typeof epub !== "string") {
                 rej(
                   new TypeError(
-                    "Expected gun.user(pub).get(epub) to be an string."
+                    "Expected gun.user(pub).get(epub) to be an string. Instead got: " +
+                      typeof epub
                   )
                 );
               } else {
