@@ -50,13 +50,11 @@ exports.onAcceptedRequests = async (
   onSentRequestsFactory(async sentRequests => {
     for (const [reqKey, req] of Object.entries(sentRequests)) {
       try {
-        const encryptedForMeRequestID = await SEA.encrypt(reqKey, mySecret);
-
         /** @type {string|undefined} */
-        const encryptedForMeRecipientPub = await new Promise((res, rej) => {
+        const recipientPub = await new Promise((res, rej) => {
           user
             .get(Key.REQUEST_TO_USER)
-            .get(encryptedForMeRequestID)
+            .get(reqKey)
             .once(userPub => {
               if (typeof userPub === "undefined") {
                 res(undefined);
@@ -81,16 +79,9 @@ exports.onAcceptedRequests = async (
             });
         });
 
-        if (typeof encryptedForMeRecipientPub === "undefined") {
-          throw new TypeError(
-            "typeof encryptedForMeRecipientPub === 'undefined'"
-          );
+        if (typeof recipientPub === "undefined") {
+          throw new TypeError("typeof recipientPub === 'undefined'");
         }
-
-        const recipientPub = await SEA.decrypt(
-          encryptedForMeRecipientPub,
-          mySecret
-        );
 
         /** @type {string} */
         const recipientEpub = await new Promise((res, rej) => {
@@ -144,7 +135,7 @@ exports.onAcceptedRequests = async (
         const alreadyExists = await new Promise(res => {
           user
             .get(Key.USER_TO_INCOMING)
-            .get(encryptedForMeRecipientPub)
+            .get(recipientPub)
             .once(feedIDRecord => {
               res(typeof feedIDRecord !== "undefined");
             });
@@ -160,7 +151,7 @@ exports.onAcceptedRequests = async (
 
         user
           .get(Key.USER_TO_INCOMING)
-          .get(encryptedForMeRecipientPub)
+          .get(recipientPub)
           .put(encryptedForMeIncomingID);
       } catch (e) {
         console.error(`Error inside Jobs.onAcceptedRequests: ${e.message}`);

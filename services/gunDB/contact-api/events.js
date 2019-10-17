@@ -127,7 +127,7 @@ const __onSentRequestToUser = async (cb, user, SEA) => {
   user
     .get(Key.REQUEST_TO_USER)
     .map()
-    .on(async (encryptedUserPub, encryptedRequestID) => {
+    .on(async (encryptedUserPub, requestID) => {
       if (typeof encryptedUserPub !== "string") {
         console.error("got a non string value");
         return;
@@ -139,7 +139,6 @@ const __onSentRequestToUser = async (cb, user, SEA) => {
       }
 
       const userPub = await SEA.decrypt(encryptedUserPub, mySecret);
-      const requestID = await SEA.decrypt(encryptedRequestID, mySecret);
 
       requestToUser[requestID] = userPub;
 
@@ -166,7 +165,7 @@ const __onUserToIncoming = async (cb, user, SEA) => {
   user
     .get(Key.USER_TO_INCOMING)
     .map()
-    .on(async (encryptedIncomingID, encryptedUserPub) => {
+    .on(async (encryptedIncomingID, userPub) => {
       if (typeof encryptedIncomingID !== "string") {
         console.error("got a non string value");
         return;
@@ -178,7 +177,6 @@ const __onUserToIncoming = async (cb, user, SEA) => {
       }
 
       const incomingID = await SEA.decrypt(encryptedIncomingID, mySecret);
-      const userPub = await SEA.decrypt(encryptedUserPub, mySecret);
 
       userToOutgoing[userPub] = incomingID;
 
@@ -704,14 +702,11 @@ const onSimplerReceivedRequests = (cb, gun, user, SEA) => {
   user
     .get(Key.USER_TO_INCOMING)
     .map()
-    .on(async (_, encryptedUserPK) => {
+    .on(async (_, userPK) => {
       if (!user.is) {
         console.warn("!user.is");
         return;
       }
-
-      const secret = await SEA.secret(user.is.pub, user._.sea);
-      const userPK = await SEA.decrypt(encryptedUserPK, secret);
 
       requestorsAlreadyAccepted.add(userPK);
     });
@@ -880,14 +875,11 @@ const onSimplerSentRequests = (cb, gun, user, SEA) => {
   user
     .get(Key.USER_TO_INCOMING)
     .map()
-    .on(async (_, encryptedUserPK) => {
+    .on(async (_, userPK) => {
       if (!user.is) {
         console.warn("!user.is");
         return;
       }
-
-      const secret = await SEA.secret(user.is.pub, user._.sea);
-      const userPK = await SEA.decrypt(encryptedUserPK, secret);
 
       recipientsThatHaveAcceptedRequest.add(userPK);
 

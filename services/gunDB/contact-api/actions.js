@@ -276,15 +276,10 @@ const acceptRequest = async (
 
   const encryptedForMeIncomingID = await SEA.encrypt(incomingID, mySecret);
 
-  const encryptedForMeRequestorPK = await SEA.encrypt(
-    handshakeRequest.from,
-    mySecret
-  );
-
   await new Promise((res, rej) => {
     user
       .get(Key.USER_TO_INCOMING)
-      .get(encryptedForMeRequestorPK)
+      .get(handshakeRequest.from)
       .put(encryptedForMeIncomingID, ack => {
         if (ack.err) {
           rej(new Error(ack.err));
@@ -297,13 +292,13 @@ const acceptRequest = async (
   const encryptedForMeOutgoingID = await SEA.encrypt(outgoingFeedID, mySecret);
 
   console.warn(
-    `writing to recipient to outgoing: recipientKEY:: ${encryptedForMeRequestorPK} -- outgoingID: ${encryptedForMeOutgoingID}`
+    `writing to recipient to outgoing: recipientKEY:: ${handshakeRequest.from} -- outgoingID: ${encryptedForMeOutgoingID}`
   );
 
   await new Promise((res, rej) => {
     user
       .get(Key.RECIPIENT_TO_OUTGOING)
-      .get(encryptedForMeRequestorPK)
+      .get(handshakeRequest.from)
       .put(encryptedForMeOutgoingID, ack => {
         if (ack.err) {
           rej(new Error(ack.err));
@@ -508,22 +503,19 @@ const sendHandshakeRequest = async (
   );
 
   const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
-  const encryptedForMeRecipientPublicKey = await SEA.encrypt(
-    recipientPublicKey,
-    mySecret
-  );
+
   const encryptedForMeOutgoingID = await SEA.encrypt(outgoingFeedID, mySecret);
 
   console.warn("------------");
   console.warn(
-    `writing to recipient to outgoing: recipientKEY:: ${encryptedForMeRecipientPublicKey} -- outgoingID: ${encryptedForMeOutgoingID}`
+    `writing to recipient to outgoing: recipientKEY:: ${recipientPublicKey} -- outgoingID: ${encryptedForMeOutgoingID}`
   );
   console.warn("------");
 
   await new Promise((res, rej) => {
     user
       .get(Key.RECIPIENT_TO_OUTGOING)
-      .get(encryptedForMeRecipientPublicKey)
+      .get(recipientPublicKey)
       .put(encryptedForMeOutgoingID, ack => {
         if (ack.err) {
           rej(
@@ -587,8 +579,8 @@ const sendHandshakeRequest = async (
       });
   });
 
-  const encryptedForMeRequestID = await SEA.encrypt(
-    /** @type {string} */ (handshakeRequest._["#"]),
+  const encryptedForMeRecipientPublicKey = await SEA.encrypt(
+    recipientPublicKey,
     mySecret
   );
 
@@ -597,7 +589,7 @@ const sendHandshakeRequest = async (
   await new Promise((res, rej) => {
     user
       .get(Key.REQUEST_TO_USER)
-      .get(encryptedForMeRequestID)
+      .get(handshakeRequest._["#"])
       .put(encryptedForMeRecipientPublicKey, ack => {
         if (ack.err) {
           rej(
@@ -664,14 +656,10 @@ const sendMessage = async (recipientPublicKey, body, gun, user, SEA) => {
   }
 
   const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
-  const encryptedForMeRecipientPublicKey = await SEA.encrypt(
-    recipientPublicKey,
-    mySecret
-  );
 
   console.warn("--------------------");
   console.warn(
-    `fetching from recipient-to-outgoing key: ${encryptedForMeRecipientPublicKey}`
+    `fetching from recipient-to-outgoing key: ${recipientPublicKey}`
   );
   console.warn("------------------");
 
@@ -679,7 +667,7 @@ const sendMessage = async (recipientPublicKey, body, gun, user, SEA) => {
   const encryptedForMeOutgoingID = await new Promise((res, rej) => {
     user
       .get(Key.RECIPIENT_TO_OUTGOING)
-      .get(encryptedForMeRecipientPublicKey)
+      .get(recipientPublicKey)
       .once(efmoid => {
         if (typeof efmoid === "string") {
           res(efmoid);
