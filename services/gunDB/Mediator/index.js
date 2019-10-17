@@ -39,6 +39,7 @@ const API = require("../contact-api/index");
 const Config = require("../config");
 const Event = require("../event-constants");
 
+
 /**
  * @typedef {import('../contact-api/SimpleGUN').GUNNode} GUNNode
  * @typedef {import('../contact-api/SimpleGUN').UserGUNNode} UserGUNNode
@@ -573,6 +574,7 @@ const isRegistering = () => _isRegistering;
 const authenticate = (alias, pass) => {
   return new Promise((res, rej) => {
     if (isAuthenticated()) {
+      // @ts-ignore
       res(user.is.pub)
       return
     }
