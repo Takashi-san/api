@@ -148,21 +148,21 @@ const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
       with: encryptedForMeRecipientPub
     };
 
-    console.warn('--------------------')
+    console.warn("--------------------");
     console.warn(
       `typeof encryptedForMeRecipientPub: ${typeof encryptedForMeRecipientPub}`
     );
-    console.warn('--------------------')
+    console.warn("--------------------");
 
-    console.warn('--------------------')
+    console.warn("--------------------");
     console.warn(
       `typeof newPartialOutgoingFeed.with: ${typeof newPartialOutgoingFeed.with}`
     );
-    console.warn('--------------------')
+    console.warn("--------------------");
 
-    console.warn('--------------------')
-      console.warn(`newPartialOutgoingFeed.with: ${newPartialOutgoingFeed.with}`)
-    console.warn('--------------------')
+    console.warn("--------------------");
+    console.warn(`newPartialOutgoingFeed.with: ${newPartialOutgoingFeed.with}`);
+    console.warn("--------------------");
 
     /** @type {GUNNode} */
     const outgoingFeedObj = await new Promise((res, rej) => {
@@ -178,17 +178,17 @@ const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
     });
 
     console.warn("--------------------------------");
-    console.warn('outgoingFeedObj:')
-    console.warn(outgoingFeedObj)
+    console.warn("outgoingFeedObj:");
+    console.warn(outgoingFeedObj);
     console.warn("--------------------------------");
     console.warn(
-      `typeof outgoingFeedObj._['#']: ${typeof outgoingFeedObj._['#']} && ${
-        outgoingFeedObj._['#']
+      `typeof outgoingFeedObj._['#']: ${typeof outgoingFeedObj._["#"]} && ${
+        outgoingFeedObj._["#"]
       }`
     );
     console.warn("--------------------------------");
 
-    const outgoingFeedID = /** @type {string} */ (outgoingFeedObj._['#']);
+    const outgoingFeedID = /** @type {string} */ (outgoingFeedObj._["#"]);
 
     const outgoingFeed = user.get(Key.OUTGOINGS).get(outgoingFeedID);
 
@@ -321,6 +321,10 @@ const acceptRequest = async (
   });
 
   const encryptedForMeOutgoingID = await SEA.encrypt(outgoingFeedID, mySecret);
+
+  console.warn(
+    `writing to recipient to outgoing: recipientKEY:: ${encryptedForMeRequestorPK} -- outgoingID: ${encryptedForMeOutgoingID}`
+  );
 
   await new Promise((res, rej) => {
     user
@@ -543,6 +547,12 @@ const sendHandshakeRequest = async (
   console.warn(`typeof encryptedForMeOutgoingID: ${encryptedForMeOutgoingID}`);
   console.warn(encryptedForMeOutgoingID);
 
+  console.warn("------------");
+  console.warn(
+    `writing to recipient to outgoing: recipientKEY:: ${encryptedForMeRecipientPublicKey} -- outgoingID: ${encryptedForMeOutgoingID}`
+  );
+  console.warn("------");
+
   await new Promise((res, rej) => {
     user
       .get(Key.RECIPIENT_TO_OUTGOING)
@@ -613,7 +623,7 @@ const sendHandshakeRequest = async (
   });
 
   const encryptedForMeRequestID = await SEA.encrypt(
-    /** @type {string} */ (handshakeRequest._['#']),
+    /** @type {string} */ (handshakeRequest._["#"]),
     mySecret
   );
 
@@ -694,6 +704,10 @@ const sendMessage = async (recipientPublicKey, body, gun, user, SEA) => {
     mySecret
   );
 
+  console.warn('--------------------')
+  console.warn(`fetching from recipient-to-outgoing key: ${encryptedForMeRecipientPublicKey}`)
+  console.warn('------------------')
+
   /** @type {string} */
   const encryptedForMeOutgoingID = await new Promise((res, rej) => {
     user
@@ -705,7 +719,7 @@ const sendMessage = async (recipientPublicKey, body, gun, user, SEA) => {
         } else {
           rej(
             new Error(
-              `Expected outgoingID to be an string, instead got: ${typeof efmoid}`
+              `sendMessage(): Expected outgoingID to be an string, instead got: ${typeof efmoid}`
             )
           );
         }
@@ -719,12 +733,12 @@ const sendMessage = async (recipientPublicKey, body, gun, user, SEA) => {
       .get("epub")
       .once(epub => {
         if (typeof epub !== "string") {
-          rej(new Error("Expected gun.user(pub).get(epub) to be an string."));
+          rej(new Error("sendMessage(): Expected gun.user(pub).get(epub) to be an string."));
         } else {
           if (epub.length === 0) {
             rej(
               new Error(
-                "Expected gun.user(pub).get(epub) to be a populated string."
+                "sendMessage(): Expected gun.user(pub).get(epub) to be a populated string."
               )
             );
           }
