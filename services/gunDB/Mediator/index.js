@@ -574,6 +574,8 @@ const isRegistering = () => _isRegistering;
 const authenticate = (alias, pass) => {
   return new Promise((res, rej) => {
     if (isAuthenticated()) {
+      API.Jobs.onAcceptedRequests(API.Events.onSentRequests, gun, user, mySEA)
+
       // @ts-ignore
       res(user.is.pub)
       return
@@ -600,6 +602,7 @@ const authenticate = (alias, pass) => {
       if (typeof ack.err === "string") {
         rej(new Error(ack.err));
       } else if (typeof ack.sea === "object") {
+        API.Jobs.onAcceptedRequests(API.Events.onSentRequests, gun, user, mySEA)
         res(ack.sea.pub);
       } else {
         rej(new Error("Unknown error."));
