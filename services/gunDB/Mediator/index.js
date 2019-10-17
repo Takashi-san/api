@@ -13,18 +13,8 @@ const mySEA = {}
 
 mySEA.encrypt = (msg, secret) => {
   if (typeof msg !== 'string') {
-    console.warn('---------------')
-    console.warn(`msg to encrypt not an string: ${typeof msg}`)
-    console.warn(msg)
-    console.warn('---------------')
-
     return SEAx.encrypt(msg, secret)
   }
-
-  console.warn('------')
-    console.warn(`msg to encrypt an string: ${msg}`)
-    console.warn('------')
-
   return SEAx.encrypt(msg, secret).then(encMsg => {
     return '$$__SHOCKWALLET__' + encMsg
   })
@@ -32,17 +22,8 @@ mySEA.encrypt = (msg, secret) => {
 
 mySEA.decrypt = (encMsg, secret) => {
   if (typeof encMsg !== 'string') {
-    console.warn('---------------')
-    console.warn('encMsg to decrypt not an string: ' + typeof encMsg)
-    console.warn(encMsg)
-    console.warn('---------------')
-
     return SEAx.decrypt(encMsg, secret)
   } else {
-    console.warn('---------------')
-    console.warn('encMsg to decrypt an string: ' +  encMsg)
-    console.warn('---------------')
-
     return SEAx.decrypt(encMsg.slice('$$__SHOCKWALLET__'.length), secret)
   }
 }
@@ -135,6 +116,7 @@ class Mediator {
     socket.on(Action.BLACKLIST, this.blacklist);
     socket.on(Action.GENERATE_NEW_HANDSHAKE_NODE, this.generateHandshakeNode);
     socket.on(Action.SEMD_HANDSHAKE_REQUEST, this.sendHandshakeRequest);
+    socket.on(Action.SEND_HANDSHAKE_REQUEST_WITH_INITIAL_MSG, this.sendHRWithInitialMsg)
     socket.on(Action.SEND_MESSAGE, this.sendMessage);
     socket.on(Action.SET_AVATAR, this.setAvatar);
     socket.on(Action.SET_DISPLAY_NAME, this.setDisplayName);
@@ -274,6 +256,38 @@ class Mediator {
       });
     }
   };
+
+  /**
+   * @param {Readonly<{ initialMsg: string , handshakeAddress: string , recipientPublicKey: string , token: string }>} body
+   */
+  sendHRWithInitialMsg = async body => {
+    try {
+      const { initialMsg, handshakeAddress, recipientPublicKey, token } = body;
+
+      await throwOnInvalidToken(token);
+
+      await API.Actions.sendHRWithInitialMsg(
+        initialMsg,
+        handshakeAddress,
+        recipientPublicKey,
+        gun,
+        user,
+        mySEA
+      );
+
+      this.socket.emit(Action.SEND_HANDSHAKE_REQUEST_WITH_INITIAL_MSG, {
+        ok: true,
+        msg: null,
+        origBody: body
+      });
+    } catch (e) { console.log(e);
+      this.socket.emit(Action.SEND_HANDSHAKE_REQUEST_WITH_INITIAL_MSG, {
+        ok: false,
+        msg: e.message,
+        origBody: body
+      });
+    }
+  }
 
   /**
    * @param {Readonly<{ body: string , recipientPublicKey: string , token: string }>} reqBody

@@ -148,22 +148,6 @@ const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
       with: encryptedForMeRecipientPub
     };
 
-    console.warn("--------------------");
-    console.warn(
-      `typeof encryptedForMeRecipientPub: ${typeof encryptedForMeRecipientPub}`
-    );
-    console.warn("--------------------");
-
-    console.warn("--------------------");
-    console.warn(
-      `typeof newPartialOutgoingFeed.with: ${typeof newPartialOutgoingFeed.with}`
-    );
-    console.warn("--------------------");
-
-    console.warn("--------------------");
-    console.warn(`newPartialOutgoingFeed.with: ${newPartialOutgoingFeed.with}`);
-    console.warn("--------------------");
-
     /** @type {GUNNode} */
     const outgoingFeedObj = await new Promise((res, rej) => {
       const outFeed = user
@@ -177,24 +161,9 @@ const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
         });
     });
 
-    console.warn("--------------------------------");
-    console.warn("outgoingFeedObj:");
-    console.warn(outgoingFeedObj);
-    console.warn("--------------------------------");
-    console.warn(
-      `typeof outgoingFeedObj._['#']: ${typeof outgoingFeedObj._["#"]} && ${
-        outgoingFeedObj._["#"]
-      }`
-    );
-    console.warn("--------------------------------");
-
     const outgoingFeedID = /** @type {string} */ (outgoingFeedObj._["#"]);
 
     const outgoingFeed = user.get(Key.OUTGOINGS).get(outgoingFeedID);
-
-    console.warn("--------------------------------");
-    console.warn(`typeof outgoingFeed.get: ${typeof outgoingFeed.get}`);
-    console.warn("--------------------------------");
 
     await new Promise((res, rej) => {
       outgoingFeed.get(Key.MESSAGES).set(__createInitialMessage(), ack => {
@@ -205,12 +174,6 @@ const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
         }
       });
     });
-
-    console.warn("--------------------------------");
-    console.warn(
-      `after outgoingFeed.get(KEY.MESSAGES.set) and before returning outgoingFeedID: ${outgoingFeedID}`
-    );
-    console.warn("--------------------------------");
 
     return outgoingFeedID;
   } catch (e) {
@@ -286,13 +249,24 @@ const acceptRequest = async (
   );
 
   /** @type {string} */
-  const requestorEpub = await new Promise(res => {
+  const requestorEpub = await new Promise((res, rej) => {
     gun
       .user(handshakeRequest.from)
       .get("epub")
       .once(epub => {
-        // @ts-ignore
-        res(epub);
+        if (typeof epub !== "string") {
+          rej(new Error("Expected gun.user(pub).get(epub) to be an string."));
+        } else {
+          if (epub.length === 0) {
+            rej(
+              new Error(
+                "Expected gun.user(pub).get(epub) to be a populated string."
+              )
+            );
+          } else {
+            res(epub);
+          }
+        }
       });
   });
 
@@ -533,19 +507,12 @@ const sendHandshakeRequest = async (
     SEA
   );
 
-  console.log(
-    `outgoingFeedID from __createOUtgoingFeed: ${typeof outgoingFeedID} && ${outgoingFeedID}`
-  );
-
   const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
   const encryptedForMeRecipientPublicKey = await SEA.encrypt(
     recipientPublicKey,
     mySecret
   );
   const encryptedForMeOutgoingID = await SEA.encrypt(outgoingFeedID, mySecret);
-
-  console.warn(`typeof encryptedForMeOutgoingID: ${encryptedForMeOutgoingID}`);
-  console.warn(encryptedForMeOutgoingID);
 
   console.warn("------------");
   console.warn(
@@ -598,8 +565,6 @@ const sendHandshakeRequest = async (
 
   const secret = await SEA.secret(recipientEpub, user._.sea);
   const encryptedOutgoingFeedID = await SEA.encrypt(outgoingFeedID, secret);
-
-  console.warn(`typeof encryptedOutgoingFeedID: ${encryptedOutgoingFeedID}`);
 
   /** @type {HandshakeRequest} */
   const handshakeRequestData = {
@@ -704,9 +669,11 @@ const sendMessage = async (recipientPublicKey, body, gun, user, SEA) => {
     mySecret
   );
 
-  console.warn('--------------------')
-  console.warn(`fetching from recipient-to-outgoing key: ${encryptedForMeRecipientPublicKey}`)
-  console.warn('------------------')
+  console.warn("--------------------");
+  console.warn(
+    `fetching from recipient-to-outgoing key: ${encryptedForMeRecipientPublicKey}`
+  );
+  console.warn("------------------");
 
   /** @type {string} */
   const encryptedForMeOutgoingID = await new Promise((res, rej) => {
@@ -733,7 +700,11 @@ const sendMessage = async (recipientPublicKey, body, gun, user, SEA) => {
       .get("epub")
       .once(epub => {
         if (typeof epub !== "string") {
-          rej(new Error("sendMessage(): Expected gun.user(pub).get(epub) to be an string."));
+          rej(
+            new Error(
+              "sendMessage(): Expected gun.user(pub).get(epub) to be an string."
+            )
+          );
         } else {
           if (epub.length === 0) {
             rej(
@@ -841,6 +812,35 @@ const setDisplayName = (displayName, user) =>
       });
   });
 
+/**
+ * @param {string} initialMsg
+ * @param {string} handshakeAddress
+ * @param {string} recipientPublicKey
+ * @param {GUNNode} gun
+ * @param {UserGUNNode} user
+ * @param {ISEA} SEA
+ * @throws {Error|TypeError}
+ * @returns {Promise<void>}
+ */
+const sendHRWithInitialMsg = async (
+  initialMsg,
+  handshakeAddress,
+  recipientPublicKey,
+  gun,
+  user,
+  SEA
+) => {
+  await sendHandshakeRequest(
+    handshakeAddress,
+    recipientPublicKey,
+    gun,
+    user,
+    SEA
+  );
+
+  await sendMessage(recipientPublicKey, initialMsg, gun, user, SEA);
+};
+
 module.exports = {
   INITIAL_MSG,
   __encryptAndPutResponseToRequest,
@@ -854,5 +854,6 @@ module.exports = {
   sendHandshakeRequest,
   sendMessage,
   setAvatar,
-  setDisplayName
+  setDisplayName,
+  sendHRWithInitialMsg
 };
