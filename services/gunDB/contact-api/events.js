@@ -87,7 +87,7 @@ const __onOutgoingMessage = async (outgoingKey, cb, gun, user, SEA) => {
     .map()
     .on(async (msg, key) => {
       if (!Schema.isMessage(msg)) {
-        console.warn("non message received");
+        console.warn("non message received: " + JSON.stringify(msg));
         return;
       }
 
@@ -612,6 +612,10 @@ const onChats = (cb, gun, user, SEA) => {
           };
         }
 
+        console.log(
+          `recipientPK: ${recipientPK} -- incomingFeedID: ${incomingFeedID}`
+        );
+
         const chat = recipientPKToChat[recipientPK];
 
         if (!usersWithIncomingListeners.includes(recipientPK)) {
@@ -619,6 +623,9 @@ const onChats = (cb, gun, user, SEA) => {
 
           onIncomingMessages(
             msgs => {
+              console.log(
+                `msgs for recipientPK: ${recipientPK}: ${Object.values(msgs)}`
+              );
               for (const [msgK, msg] of Object.entries(msgs)) {
                 const messages = chat.messages;
 
