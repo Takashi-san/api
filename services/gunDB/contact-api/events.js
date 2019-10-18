@@ -178,6 +178,11 @@ const __onUserToIncoming = async (cb, user, SEA) => {
 
       const incomingID = await SEA.decrypt(encryptedIncomingID, mySecret);
 
+      if (typeof incomingID === "undefined") {
+        console.warn("could not decrypt incomingID inside __onUserToIncoming");
+        return;
+      }
+
       userToOutgoing[userPub] = incomingID;
 
       cb(userToOutgoing);
