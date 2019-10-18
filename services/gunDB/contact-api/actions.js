@@ -215,8 +215,8 @@ const acceptRequest = async (
   }
 
   /** @type {HandshakeRequest} */
-  const { 
-    response: encryptedForUsIncomingID, 
+  const {
+    response: encryptedForUsIncomingID,
     from: senderPublicKey
   } = await new Promise((res, rej) => {
     const requestNode = user.get(Key.CURRENT_HANDSHAKE_NODE).get(requestID);
@@ -254,7 +254,7 @@ const acceptRequest = async (
   });
 
   const incomingID = await SEA.decrypt(
-    encryptedForUsIncomingID, 
+    encryptedForUsIncomingID,
     await SEA.secret(requestorEpub, user._.sea)
   );
 
@@ -315,7 +315,7 @@ const acceptRequest = async (
     gun,
     user,
     SEA
-  );  
+  );
 };
 
 /**
@@ -664,32 +664,6 @@ const sendMessage = async (recipientPublicKey, body, gun, user, SEA) => {
     );
   }
 
-  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
-
-  console.warn("--------------------");
-  console.warn(
-    `fetching from recipient-to-outgoing key: ${recipientPublicKey}`
-  );
-  console.warn("------------------");
-
-  /** @type {string} */
-  const encryptedForMeOutgoingID = await new Promise((res, rej) => {
-    user
-      .get(Key.RECIPIENT_TO_OUTGOING)
-      .get(recipientPublicKey)
-      .once(efmoid => {
-        if (typeof efmoid === "string") {
-          res(efmoid);
-        } else {
-          rej(
-            new Error(
-              `sendMessage(): Expected outgoingID to be an string, instead got: ${typeof efmoid}`
-            )
-          );
-        }
-      });
-  });
-
   /** @type {string} */
   const recipientEpub = await new Promise((res, rej) => {
     gun
@@ -697,6 +671,10 @@ const sendMessage = async (recipientPublicKey, body, gun, user, SEA) => {
       .get("epub")
       .once(epub => {
         if (typeof epub !== "string") {
+          console.warn(
+            "sendMessage(): Expected gun.user(pub).get(epub) to be an string."
+          );
+
           rej(
             new Error(
               "sendMessage(): Expected gun.user(pub).get(epub) to be an string."
@@ -704,6 +682,10 @@ const sendMessage = async (recipientPublicKey, body, gun, user, SEA) => {
           );
         } else {
           if (epub.length === 0) {
+            console.warn(
+              "sendMessage(): Expected gun.user(pub).get(epub) to be a populated string."
+            );
+
             rej(
               new Error(
                 "sendMessage(): Expected gun.user(pub).get(epub) to be a populated string."
@@ -715,15 +697,58 @@ const sendMessage = async (recipientPublicKey, body, gun, user, SEA) => {
       });
   });
 
-  const secret = await SEA.secret(recipientEpub, user._.sea);
-  const encryptedBody = await SEA.encrypt(body, secret);
+  const outgoingID = await (async () => {
+    /** @type {string} */
+    const encryptedForMeOutgoingID = await new Promise((res, rej) => {
+      console.warn("--------------------");
+      console.warn(
+        `fetching from recipient-to-outgoing key: ${recipientPublicKey}`
+      );
+      console.warn("------------------");
+
+      user
+        .get(Key.RECIPIENT_TO_OUTGOING)
+        .get(recipientPublicKey)
+        .once(efmoid => {
+          if (typeof efmoid === "string") {
+            res(efmoid);
+          } else {
+            console.warn(
+              `sendMessage(): Expected outgoingID to be an string, instead got: ${typeof efmoid}`
+            );
+
+            rej(
+              new Error(
+                `sendMessage(): Expected outgoingID to be an string, instead got: ${typeof efmoid}`
+              )
+            );
+          }
+        });
+    });
+
+    const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+    const outID = await SEA.decrypt(encryptedForMeOutgoingID, mySecret);
+
+    if (typeof outID !== "string") {
+      console.warn(
+        "sendMessage-> Could not decrypt outgoing id obtained from recipient to outgoing map"
+      );
+
+      throw new TypeError(
+        "sendMessage-> Could not decrypt outgoing id obtained from recipient to outgoing map"
+      );
+    }
+
+    return outID;
+  })();
+
+  const ourSecret = await SEA.secret(recipientEpub, user._.sea);
+  const encryptedBody = await SEA.encrypt(body, ourSecret);
 
   const newMessage = {
     body: encryptedBody,
     timestamp: Date.now()
   };
-
-  const outgoingID = await SEA.decrypt(encryptedForMeOutgoingID, mySecret);
 
   return new Promise((res, rej) => {
     user
