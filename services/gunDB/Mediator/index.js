@@ -28,8 +28,11 @@ mySEA.decrypt = (encMsg, secret) => {
   }
 }
 
-mySEA.secret = (a, b) => {
-  return SEAx.secret(a, b)
+mySEA.secret = (recipientOrSenderEpub, recipientOrSenderSEA) => {
+  if (recipientOrSenderEpub === recipientOrSenderSEA.pub) {
+    throw new Error('Do not use pub for mysecret')
+  }
+  return SEAx.secret(recipientOrSenderEpub, recipientOrSenderSEA)
 }
 
 const auth = require("../../auth/auth");
