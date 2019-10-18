@@ -769,13 +769,37 @@ const sendHRWithInitialMsg = async (
   user,
   SEA
 ) => {
-  await sendHandshakeRequest(
-    handshakeAddress,
-    recipientPublicKey,
-    gun,
-    user,
-    SEA
-  );
+  /** @type {boolean} */
+  const alreadyHandshaked = await new Promise((res, rej) => {
+    user
+      .get(Key.USER_TO_INCOMING)
+      .get(recipientPublicKey)
+      .once(inc => {
+        if (typeof inc !== "string") {
+          res(false);
+        } else {
+          if (inc.length === 0) {
+            rej(
+              new Error(
+                `sendHRWithInitialMsg()-> obtained encryptedIncomingId from user-to-incoming an string but of length 0`
+              )
+            );
+          } else {
+            res(true);
+          }
+        }
+      });
+  });
+
+  if (!alreadyHandshaked) {
+    await sendHandshakeRequest(
+      handshakeAddress,
+      recipientPublicKey,
+      gun,
+      user,
+      SEA
+    );
+  }
 
   await sendMessage(recipientPublicKey, initialMsg, gun, user, SEA);
 };
