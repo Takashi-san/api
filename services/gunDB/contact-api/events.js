@@ -546,10 +546,12 @@ const onChats = (cb, gun, user, SEA) => {
     // Only provide chats that have incoming listeners which would be contacts
     // that were actually accepted / are going on
     // Only provide chats that have received at least 1 message from gun
-    const chats = Object.values(recipientPKToChat).filter(chat =>
-      usersWithIncomingListeners.includes(chat.recipientPublicKey)
+    const chats = Object.values(recipientPKToChat)
+      .filter(chat =>
+        usersWithIncomingListeners.includes(chat.recipientPublicKey)
       )
-    .filter(chat => chat.messages.length > 0)
+      .filter(chat => Schema.isChat(chat))
+      .filter(chat => chat.messages.length > 0);
 
     // in case someone else elsewhere forgets about sorting
     chats.forEach(chat => {
