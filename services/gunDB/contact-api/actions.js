@@ -28,98 +28,6 @@ const __createInitialMessage = () => ({
 });
 
 /**
- * @param {string} requestID
- * @param {string} requestorPubKey The public key of the requestor, will be used
- * to encrypt the response.
- * @param {string} responseBody An string that will be put to the request.
- * @param {GUNNode} gun
- * @param {UserGUNNode} user
- * @param {ISEA} SEA
- * @throws {ErrorCode.COULDNT_PUT_REQUEST_RESPONSE}
- * @returns {Promise<void>}
- */
-const __encryptAndPutResponseToRequest = async (
-  requestID,
-  requestorPubKey,
-  responseBody,
-  gun,
-  user,
-  SEA
-) => {
-  const u = /** @type {UserGUNNode} */ (user);
-
-  if (!u.is) {
-    throw new Error(ErrorCode.NOT_AUTH);
-  }
-
-  if (typeof requestID !== "string") {
-    throw new TypeError();
-  }
-
-  if (requestID.length === 0) {
-    throw new TypeError();
-  }
-
-  if (typeof requestorPubKey !== "string") {
-    throw new TypeError('typeof requestorPubKey !== "string"');
-  }
-
-  if (requestorPubKey.length === 0) {
-    throw new TypeError('requestorPubKey.length === 0');
-  }
-
-  if (typeof responseBody !== "string") {
-    throw new TypeError('typeof responseBody !== "string"');
-  }
-
-  if (responseBody.length === 0) {
-    throw new TypeError('responseBody.length === 0');
-  }
-
-  const currentHandshakeNode = u.get(Key.CURRENT_HANDSHAKE_NODE).get(requestID);
-
-  /** @type {string} */
-  const requestorEpub = await new Promise((res, rej) => {
-    gun
-      .user(requestorPubKey)
-      .get("epub")
-      .once(epub => {
-        if (typeof epub !== "string") {
-          rej(new Error("Expected gun.user(pub).get(epub) to be an string."));
-        } else {
-          if (epub.length === 0) {
-            rej(
-              new Error(
-                "Expected gun.user(pub).get(epub) to be a populated string."
-              )
-            );
-          } else {
-            res(epub);
-          }
-        }
-      });
-  });
-
-  const secret = await SEA.secret(requestorEpub, user._.sea);
-  const encryptedResponse = await SEA.encrypt(responseBody, secret);
-
-  return new Promise((res, rej) => {
-    currentHandshakeNode.put(
-      {
-        response: encryptedResponse
-      },
-      ack => {
-        if (ack.err) {
-          rej(new Error(ErrorCode.COULDNT_PUT_REQUEST_RESPONSE));
-        } else {
-          res();
-        }
-      }
-    );
-  });
-};
-
-/**
  * Create a an outgoing feed. The feed will have an initial special acceptance
  * message. Returns a promise that resolves to the id of the newly-created
  * outgoing feed.
@@ -196,8 +104,6 @@ const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
  * @param {ISEA} SEA
  * @param {typeof __createOutgoingFeed} outgoingFeedCreator Pass only
  * for testing. purposes.
- * @param {typeof __encryptAndPutResponseToRequest}
- * responseToRequestEncryptorAndPutter Pass only for testing.
  * @throws {Error} Throws if trying to accept an invalid request, or an error on
  * gun's part.
  * @returns {Promise<void>}
@@ -207,20 +113,19 @@ const acceptRequest = async (
   gun,
   user,
   SEA,
-  outgoingFeedCreator = __createOutgoingFeed,
-  responseToRequestEncryptorAndPutter = __encryptAndPutResponseToRequest
+  outgoingFeedCreator = __createOutgoingFeed
 ) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
+
+  const requestNode = user.get(Key.CURRENT_HANDSHAKE_NODE).get(requestID);
 
   /** @type {HandshakeRequest} */
   const {
     response: encryptedForUsIncomingID,
     from: senderPublicKey
   } = await new Promise((res, rej) => {
-    const requestNode = user.get(Key.CURRENT_HANDSHAKE_NODE).get(requestID);
-
     requestNode.once(hr => {
       if (!isHandshakeRequest(hr)) {
         rej(new Error(ErrorCode.TRIED_TO_ACCEPT_AN_INVALID_REQUEST));
@@ -253,10 +158,9 @@ const acceptRequest = async (
       });
   });
 
-  const incomingID = await SEA.decrypt(
-    encryptedForUsIncomingID,
-    await SEA.secret(requestorEpub, user._.sea)
-  );
+  const ourSecret = await SEA.secret(requestorEpub, user._.sea);
+
+  const incomingID = await SEA.decrypt(encryptedForUsIncomingID, ourSecret);
 
   const newlyCreatedOutgoingFeedID = await outgoingFeedCreator(
     senderPublicKey,
@@ -264,7 +168,7 @@ const acceptRequest = async (
     SEA
   );
 
-  const mySecret = await SEA.secret(user._.sea.pub, user._.sea);
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
   const encryptedForMeIncomingID = await SEA.encrypt(incomingID, mySecret);
 
   await new Promise((res, rej) => {
@@ -283,10 +187,6 @@ const acceptRequest = async (
   const encryptedForMeOutgoingID = await SEA.encrypt(
     newlyCreatedOutgoingFeedID,
     mySecret
-  );
-
-  console.warn(
-    `writing to recipient to outgoing: recipientKEY:: ${senderPublicKey} -- outgoingID: ${encryptedForMeOutgoingID}`
   );
 
   await new Promise((res, rej) => {
@@ -308,14 +208,31 @@ const acceptRequest = async (
   // In this case, writing to the response is the non-revesarble op.
   ////////////////////////////////////////////////////////////////////////////
 
-  await responseToRequestEncryptorAndPutter(
-    requestID,
-    senderPublicKey,
-    newlyCreatedOutgoingFeedID,
-    gun,
-    user,
-    SEA
+  console.log("-----");
+  console.log(
+    `newly created for us outgoing ID: ${newlyCreatedOutgoingFeedID}`
   );
+  console.log("-----");
+
+  const encryptedForUsOutgoingID = await SEA.encrypt(
+    newlyCreatedOutgoingFeedID,
+    ourSecret
+  );
+
+  await new Promise((res, rej) => {
+    requestNode.put(
+      {
+        response: encryptedForUsOutgoingID
+      },
+      ack => {
+        if (ack.err) {
+          rej(new Error(ack.err));
+        } else {
+          res;
+        }
+      }
+    );
+  });
 };
 
 /**
@@ -865,7 +782,6 @@ const sendHRWithInitialMsg = async (
 
 module.exports = {
   INITIAL_MSG,
-  __encryptAndPutResponseToRequest,
   __createOutgoingFeed,
   acceptRequest,
   authenticate,
