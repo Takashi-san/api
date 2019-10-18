@@ -61,19 +61,19 @@ const __encryptAndPutResponseToRequest = async (
   }
 
   if (typeof requestorPubKey !== "string") {
-    throw new TypeError();
+    throw new TypeError('typeof requestorPubKey !== "string"');
   }
 
   if (requestorPubKey.length === 0) {
-    throw new TypeError();
+    throw new TypeError('requestorPubKey.length === 0');
   }
 
   if (typeof responseBody !== "string") {
-    throw new TypeError();
+    throw new TypeError('typeof responseBody !== "string"');
   }
 
   if (responseBody.length === 0) {
-    throw new TypeError();
+    throw new TypeError('responseBody.length === 0');
   }
 
   const currentHandshakeNode = u.get(Key.CURRENT_HANDSHAKE_NODE).get(requestID);
