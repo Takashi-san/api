@@ -214,15 +214,13 @@ const acceptRequest = async (
     throw new Error(ErrorCode.NOT_AUTH);
   }
 
-  const requestNode = user.get(Key.CURRENT_HANDSHAKE_NODE).get(requestID);
-
-  // this detects an empty node
-  if (typeof requestNode._.put === "undefined") {
-    throw new Error(ErrorCode.TRIED_TO_ACCEPT_AN_INVALID_REQUEST);
-  }
-
   /** @type {HandshakeRequest} */
-  const handshakeRequest = await new Promise((res, rej) => {
+  const { 
+    response: encryptedForUsIncomingID, 
+    from: senderPublicKey
+  } = await new Promise((res, rej) => {
+    const requestNode = user.get(Key.CURRENT_HANDSHAKE_NODE).get(requestID);
+
     requestNode.once(hr => {
       if (!isHandshakeRequest(hr)) {
         rej(new Error(ErrorCode.TRIED_TO_ACCEPT_AN_INVALID_REQUEST));
@@ -233,25 +231,10 @@ const acceptRequest = async (
     });
   });
 
-  const outgoingFeedID = await outgoingFeedCreator(
-    handshakeRequest.from,
-    user,
-    SEA
-  );
-
-  await responseToRequestEncryptorAndPutter(
-    requestID,
-    handshakeRequest.from,
-    outgoingFeedID,
-    gun,
-    user,
-    SEA
-  );
-
   /** @type {string} */
   const requestorEpub = await new Promise((res, rej) => {
     gun
-      .user(handshakeRequest.from)
+      .user(senderPublicKey)
       .get("epub")
       .once(epub => {
         if (typeof epub !== "string") {
@@ -270,16 +253,24 @@ const acceptRequest = async (
       });
   });
 
-  const ourSecret = await SEA.secret(requestorEpub, user._.sea);
-  const mySecret = await SEA.secret(user._.sea.pub, user._.sea);
-  const incomingID = await SEA.decrypt(handshakeRequest.response, ourSecret);
+  const incomingID = await SEA.decrypt(
+    encryptedForUsIncomingID, 
+    await SEA.secret(requestorEpub, user._.sea)
+  );
 
+  const newlyCreatedOutgoingFeedID = await outgoingFeedCreator(
+    senderPublicKey,
+    user,
+    SEA
+  );
+
+  const mySecret = await SEA.secret(user._.sea.pub, user._.sea);
   const encryptedForMeIncomingID = await SEA.encrypt(incomingID, mySecret);
 
   await new Promise((res, rej) => {
     user
       .get(Key.USER_TO_INCOMING)
-      .get(handshakeRequest.from)
+      .get(senderPublicKey)
       .put(encryptedForMeIncomingID, ack => {
         if (ack.err) {
           rej(new Error(ack.err));
@@ -289,16 +280,19 @@ const acceptRequest = async (
       });
   });
 
-  const encryptedForMeOutgoingID = await SEA.encrypt(outgoingFeedID, mySecret);
+  const encryptedForMeOutgoingID = await SEA.encrypt(
+    newlyCreatedOutgoingFeedID,
+    mySecret
+  );
 
   console.warn(
-    `writing to recipient to outgoing: recipientKEY:: ${handshakeRequest.from} -- outgoingID: ${encryptedForMeOutgoingID}`
+    `writing to recipient to outgoing: recipientKEY:: ${senderPublicKey} -- outgoingID: ${encryptedForMeOutgoingID}`
   );
 
   await new Promise((res, rej) => {
     user
       .get(Key.RECIPIENT_TO_OUTGOING)
-      .get(handshakeRequest.from)
+      .get(senderPublicKey)
       .put(encryptedForMeOutgoingID, ack => {
         if (ack.err) {
           rej(new Error(ack.err));
@@ -307,6 +301,21 @@ const acceptRequest = async (
         }
       });
   });
+
+  ////////////////////////////////////////////////////////////////////////////
+  // NOTE: perform non-reversable actions before destructive actions
+  // In case any of the non-reversable actions reject.
+  // In this case, writing to the response is the non-revesarble op.
+  ////////////////////////////////////////////////////////////////////////////
+
+  await responseToRequestEncryptorAndPutter(
+    requestID,
+    senderPublicKey,
+    newlyCreatedOutgoingFeedID,
+    gun,
+    user,
+    SEA
+  );  
 };
 
 /**
