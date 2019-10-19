@@ -462,6 +462,10 @@ const sendHandshakeRequest = async (
       .get("epub")
       .once(epub => {
         if (typeof epub !== "string") {
+          console.log(
+            `sendHandshakeRequest()-> Expected gun.user(pub).get(epub) to be an string. Instead got: ${typeof epub}`
+          );
+
           rej(
             new Error(
               `Expected gun.user(pub).get(epub) to be an string. Instead got: ${typeof epub}`
@@ -469,6 +473,10 @@ const sendHandshakeRequest = async (
           );
         } else {
           if (epub.length === 0) {
+            console.log(
+              "sendHandshakeRequest()-> Expected gun.user(pub).get(epub) to be a populated string."
+            );
+
             rej(
               new Error(
                 "Expected gun.user(pub).get(epub) to be a populated string."
