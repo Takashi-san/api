@@ -4,3 +4,4 @@ config/tls.cert
 config/tls.key
 services/auth/secrets.json
 .env
+*.log
