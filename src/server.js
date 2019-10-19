@@ -168,22 +168,37 @@ const server = async program => {
         server = require("http").Server(app);
       }
 
-      const io = require("socket.io")(server);
-
+      
       // setup sockets =================
       var lndLogfile = program.lndlogfile || defaults.lndLogFile;
 
-      let mySocketsEvents = require("./sockets")(
-        io,
-        lightning,
-        lnd,
-        program.user,
-        program.pwd,
-        program.limituser,
-        program.limitpwd,
-        lndLogfile,
-        lnServicesData
-      );
+      let mySocketsEvents = null;
+
+      const startSocketListener = () => {
+        const io = require("socket.io")(server);
+
+        mySocketsEvents = require("./sockets")(
+          io,
+          lightning,
+          lnd,
+          program.user,
+          program.pwd,
+          program.limituser,
+          program.limitpwd,
+          lndLogfile,
+          lnServicesData
+        );
+        
+        // Returns a function that restarts the sockets/GunDB listeners
+        return () => new Promise((resolve, reject) => {
+          io.close(() => {
+            mySocketsEvents = null;
+            resolve(startSocketListener());
+          });
+        });
+      }
+      
+      const restartSocket = startSocketListener();
 
       const routes = require("./routes")(
         app,
@@ -196,7 +211,8 @@ const server = async program => {
         {
           serverHost: module.serverHost,
           serverPort: module.serverPort
-        }
+        },
+        restartSocket
       );
 
       const colors = require("../utils/colors");

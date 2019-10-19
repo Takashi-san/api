@@ -28,8 +28,10 @@ module.exports = (
   walletUnlocker,
   lnServicesData,
   mySocketsEvents,
-  { serverHost, serverPort }
+  { serverHost, serverPort },
+  socketRestartHook
 ) => {
+  let restartSocket = socketRestartHook;
   const getWalletUnlockerStatus = (resolve, reject) => {
     walletUnlocker.getInfo({}, async (err, response) => {
       if (err) {
@@ -365,6 +367,7 @@ module.exports = (
                 walletUnlocker = lnServices.walletUnlocker;
                 const token = await auth.generateToken();
                 const publicKey = await GunDB.register(alias, password);
+                restartSocket = restartSocket();
                 return res.json({
                   mnemonicPhrase: mnemonicPhrase,
                   authorization: token,
