@@ -85,7 +85,8 @@ const server = async program => {
           next();
         } else {
           try {
-            auth.validateToken(req.headers.authorization).then(response => {
+            console.log(req.headers.authorization)
+            auth.validateToken(req.headers.authorization.replace('Bearer ', '')).then(response => {
               if (response.valid) {
                 next();
               } else {

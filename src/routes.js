@@ -676,7 +676,7 @@ module.exports = (
     const limit = page * itemsPerPage;
     lightning.listInvoices(
       { reversed, index_offset: offset, num_max_invoices: itemsPerPage },
-      async (err, { invoices, last_index_offset }) => {
+      async (err, { invoices, last_index_offset } = {}) => {
         if (err) {
           logger.debug("ListInvoices Error:", err);
           const health = await checkHealth();
@@ -801,7 +801,7 @@ module.exports = (
         logger.debug("ChannelBalance:", response);
         res.json(response);
       }
-    });
+    }); 
   });
 
   // openchannel
