@@ -45,11 +45,12 @@ module.exports = (
   const getAvailableService = () => new Promise((resolve, reject) => {
     lightning.getInfo({}, async (err, response) => {
       if (err) {
-        console.error(err);
         if (err.message.includes("unknown service lnrpc.Lightning")) {
           resolve({ service: "walletUnlocker", message: "Wallet locked", walletStatus: "locked", success: true })
+        } else if (err.code === 14) {
+          resolve({ service: "unknown", message: "Failed to connect to LND server, make sure it's up and running.", walletStatus: "unknown", success: false })
         } else {
-          resolve({ service: "lightning", message: err.message, walletStatus: "unlocked", success: false })
+          reject({ service: "lightning", message: err.message, walletStatus: "unlocked", success: false })
         }
       }
 
