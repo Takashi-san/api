@@ -340,7 +340,6 @@ module.exports = (
               });
             }
           }
-          logger.debug("initWallet:", initWalletResponse);
 
           const fs = require("fs");
 
@@ -367,7 +366,8 @@ module.exports = (
                 walletUnlocker = lnServices.walletUnlocker;
                 const token = await auth.generateToken();
                 const publicKey = await GunDB.register(alias, password);
-                restartSocket = restartSocket();
+                logger.info("Registered GunDB user")
+                restartSocket = await restartSocket();
                 return res.json({
                   mnemonicPhrase: mnemonicPhrase,
                   authorization: token,

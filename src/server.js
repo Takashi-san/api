@@ -188,9 +188,12 @@ const server = async program => {
           lndLogfile,
           lnServicesData
         );
+
+        logger.info("Socket started!");
         
         // Returns a function that restarts the sockets/GunDB listeners
         return () => new Promise((resolve, reject) => {
+          logger.warn("Restarting Socket...");
           io.close(() => {
             mySocketsEvents = null;
             resolve(startSocketListener());
