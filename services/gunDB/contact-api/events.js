@@ -87,7 +87,7 @@ const __onOutgoingMessage = async (outgoingKey, cb, gun, user, SEA) => {
     .map()
     .on(async (msg, key) => {
       if (!Schema.isMessage(msg)) {
-        console.warn("non message received");
+        console.warn("non message received: " + JSON.stringify(msg));
         return;
       }
 
@@ -127,7 +127,7 @@ const __onSentRequestToUser = async (cb, user, SEA) => {
   user
     .get(Key.REQUEST_TO_USER)
     .map()
-    .on(async (encryptedUserPub, encryptedRequestID) => {
+    .on(async (encryptedUserPub, requestID) => {
       if (typeof encryptedUserPub !== "string") {
         console.error("got a non string value");
         return;
@@ -139,7 +139,6 @@ const __onSentRequestToUser = async (cb, user, SEA) => {
       }
 
       const userPub = await SEA.decrypt(encryptedUserPub, mySecret);
-      const requestID = await SEA.decrypt(encryptedRequestID, mySecret);
 
       requestToUser[requestID] = userPub;
 
@@ -166,7 +165,7 @@ const __onUserToIncoming = async (cb, user, SEA) => {
   user
     .get(Key.USER_TO_INCOMING)
     .map()
-    .on(async (encryptedIncomingID, encryptedUserPub) => {
+    .on(async (encryptedIncomingID, userPub) => {
       if (typeof encryptedIncomingID !== "string") {
         console.error("got a non string value");
         return;
@@ -178,7 +177,11 @@ const __onUserToIncoming = async (cb, user, SEA) => {
       }
 
       const incomingID = await SEA.decrypt(encryptedIncomingID, mySecret);
-      const userPub = await SEA.decrypt(encryptedUserPub, mySecret);
+
+      if (typeof incomingID === "undefined") {
+        console.warn("could not decrypt incomingID inside __onUserToIncoming");
+        return;
+      }
 
       userToOutgoing[userPub] = incomingID;
 
@@ -547,9 +550,13 @@ const onChats = (cb, gun, user, SEA) => {
   const callCB = () => {
     // Only provide chats that have incoming listeners which would be contacts
     // that were actually accepted / are going on
-    const chats = Object.values(recipientPKToChat).filter(chat =>
-      usersWithIncomingListeners.includes(chat.recipientPublicKey)
-    );
+    // Only provide chats that have received at least 1 message from gun
+    const chats = Object.values(recipientPKToChat)
+      .filter(chat =>
+        usersWithIncomingListeners.includes(chat.recipientPublicKey)
+      )
+      .filter(chat => Schema.isChat(chat))
+      .filter(chat => chat.messages.length > 0);
 
     // in case someone else elsewhere forgets about sorting
     chats.forEach(chat => {
@@ -610,6 +617,10 @@ const onChats = (cb, gun, user, SEA) => {
           };
         }
 
+        console.log(
+          `recipientPK: ${recipientPK} -- incomingFeedID: ${incomingFeedID}`
+        );
+
         const chat = recipientPKToChat[recipientPK];
 
         if (!usersWithIncomingListeners.includes(recipientPK)) {
@@ -617,6 +628,9 @@ const onChats = (cb, gun, user, SEA) => {
 
           onIncomingMessages(
             msgs => {
+              console.log(
+                `msgs for recipientPK: ${recipientPK}: ${Object.values(msgs)}`
+              );
               for (const [msgK, msg] of Object.entries(msgs)) {
                 const messages = chat.messages;
 
@@ -704,14 +718,11 @@ const onSimplerReceivedRequests = (cb, gun, user, SEA) => {
   user
     .get(Key.USER_TO_INCOMING)
     .map()
-    .on(async (_, encryptedUserPK) => {
+    .on(async (_, userPK) => {
       if (!user.is) {
         console.warn("!user.is");
         return;
       }
-
-      const secret = await SEA.secret(user.is.pub, user._.sea);
-      const userPK = await SEA.decrypt(encryptedUserPK, secret);
 
       requestorsAlreadyAccepted.add(userPK);
     });
@@ -745,18 +756,50 @@ const onSimplerReceivedRequests = (cb, gun, user, SEA) => {
         return;
       }
 
-      const requestorEpub = await new Promise(res =>
+      const requestorEpub = await new Promise((res, rej) =>
         gun
           .user(req.from)
           .get("epub")
-          .once(res)
+          .once(epub => {
+            if (typeof epub !== "string") {
+              rej(
+                new Error("Expected gun.user(pub).get(epub) to be an string.")
+              );
+            } else {
+              if (epub.length === 0) {
+                rej(
+                  new Error(
+                    "Expected gun.user(pub).get(epub) to be a populated string."
+                  )
+                );
+              }
+              res(epub);
+            }
+          })
       );
+
+      console.log("------------------------------");
+      console.log(`requestorEpub: ${requestorEpub}`);
+      console.log("------------------------------");
+
+      console.log("------------------------------");
+      console.log(`req: ${JSON.stringify(req)}`);
+      console.log("------------------------------");
+
+      console.log("------------------------------");
+      console.log(`user._.sea: ${JSON.stringify(user._.sea)}`);
+      console.log("------------------------------");
 
       const ourSecret = await SEA.secret(requestorEpub, user._.sea);
       const decryptedResponse = await SEA.decrypt(req.response, ourSecret);
 
+      console.log("------------------------------");
       console.log(`encryptedResponse: ${req.response}`);
+      console.log("------------------------------");
+
+      console.log("------------------------------");
       console.log(`decryptedResponse: ${decryptedResponse}`);
+      console.log("------------------------------");
 
       if (!idToReceivedRequest[reqID]) {
         idToReceivedRequest[reqID] = {
@@ -880,14 +923,11 @@ const onSimplerSentRequests = (cb, gun, user, SEA) => {
   user
     .get(Key.USER_TO_INCOMING)
     .map()
-    .on(async (_, encryptedUserPK) => {
+    .on(async (_, userPK) => {
       if (!user.is) {
         console.warn("!user.is");
         return;
       }
-
-      const secret = await SEA.secret(user.is.pub, user._.sea);
-      const userPK = await SEA.decrypt(encryptedUserPK, secret);
 
       recipientsThatHaveAcceptedRequest.add(userPK);
 

@@ -27,6 +27,7 @@ export type Listener = (data: ListenerData, key: string) => void;
 export type Callback = (ack: Ack) => void;
 
 export interface Soul {
+  '#': string;
   get: string | undefined;
   put: Primitive | null | object | undefined;
 }

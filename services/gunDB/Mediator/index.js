@@ -2,12 +2,38 @@ const Gun = require("gun");
 const debounce = require("lodash/debounce");
 const once = require("lodash/once");
 
-// @ts-ignore
-require("gun/sea");
 
 /** @type {import('../contact-api/SimpleGUN').ISEA} */
 // @ts-ignore
-const Sea = global.SEA;
+const SEAx = require("gun/sea");
+
+/** @type {import('../contact-api/SimpleGUN').ISEA} */
+const mySEA = {}
+
+
+mySEA.encrypt = (msg, secret) => {
+  if (typeof msg !== 'string') {
+    return SEAx.encrypt(msg, secret)
+  }
+  return SEAx.encrypt(msg, secret).then(encMsg => {
+    return '$$__SHOCKWALLET__' + encMsg
+  })
+}
+
+mySEA.decrypt = (encMsg, secret) => {
+  if (typeof encMsg !== 'string') {
+    return SEAx.decrypt(encMsg, secret)
+  } else {
+    return SEAx.decrypt(encMsg.slice('$$__SHOCKWALLET__'.length), secret)
+  }
+}
+
+mySEA.secret = (recipientOrSenderEpub, recipientOrSenderSEA) => {
+  if (recipientOrSenderEpub === recipientOrSenderSEA.pub) {
+    throw new Error('Do not use pub for mysecret')
+  }
+  return SEAx.secret(recipientOrSenderEpub, recipientOrSenderSEA)
+}
 
 const auth = require("../../auth/auth");
 
@@ -15,6 +41,7 @@ const Action = require("../action-constants.js");
 const API = require("../contact-api/index");
 const Config = require("../config");
 const Event = require("../event-constants");
+
 
 /**
  * @typedef {import('../contact-api/SimpleGUN').GUNNode} GUNNode
@@ -93,6 +120,7 @@ class Mediator {
     socket.on(Action.BLACKLIST, this.blacklist);
     socket.on(Action.GENERATE_NEW_HANDSHAKE_NODE, this.generateHandshakeNode);
     socket.on(Action.SEMD_HANDSHAKE_REQUEST, this.sendHandshakeRequest);
+    socket.on(Action.SEND_HANDSHAKE_REQUEST_WITH_INITIAL_MSG, this.sendHRWithInitialMsg)
     socket.on(Action.SEND_MESSAGE, this.sendMessage);
     socket.on(Action.SET_AVATAR, this.setAvatar);
     socket.on(Action.SET_DISPLAY_NAME, this.setDisplayName);
@@ -115,7 +143,7 @@ class Mediator {
 
       await throwOnInvalidToken(token);
 
-      await API.Actions.acceptRequest(requestID, gun, user, Sea);
+      await API.Actions.acceptRequest(requestID, gun, user, mySEA);
 
       this.socket.emit(Action.ACCEPT_REQUEST, {
         ok: true,
@@ -137,9 +165,9 @@ class Mediator {
         ),
         gun,
         user,
-        Sea
+        mySEA
       );
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Action.ACCEPT_REQUEST, {
         ok: false,
         msg: e.message,
@@ -164,7 +192,7 @@ class Mediator {
         msg: null,
         origBody: body
       });
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Action.BLACKLIST, {
         ok: false,
         msg: e.message,
@@ -193,7 +221,7 @@ class Mediator {
         msg: null,
         origBody: body
       });
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Action.GENERATE_NEW_HANDSHAKE_NODE, {
         ok: false,
         msg: e.message,
@@ -216,7 +244,7 @@ class Mediator {
         recipientPublicKey,
         gun,
         user,
-        Sea
+        mySEA
       );
 
       this.socket.emit(Action.SEMD_HANDSHAKE_REQUEST, {
@@ -224,7 +252,7 @@ class Mediator {
         msg: null,
         origBody: body
       });
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Action.SEMD_HANDSHAKE_REQUEST, {
         ok: false,
         msg: e.message,
@@ -232,6 +260,38 @@ class Mediator {
       });
     }
   };
+
+  /**
+   * @param {Readonly<{ initialMsg: string , handshakeAddress: string , recipientPublicKey: string , token: string }>} body
+   */
+  sendHRWithInitialMsg = async body => {
+    try {
+      const { initialMsg, handshakeAddress, recipientPublicKey, token } = body;
+
+      await throwOnInvalidToken(token);
+
+      await API.Actions.sendHRWithInitialMsg(
+        initialMsg,
+        handshakeAddress,
+        recipientPublicKey,
+        gun,
+        user,
+        mySEA
+      );
+
+      this.socket.emit(Action.SEND_HANDSHAKE_REQUEST_WITH_INITIAL_MSG, {
+        ok: true,
+        msg: null,
+        origBody: body
+      });
+    } catch (e) { console.log(e);
+      this.socket.emit(Action.SEND_HANDSHAKE_REQUEST_WITH_INITIAL_MSG, {
+        ok: false,
+        msg: e.message,
+        origBody: body
+      });
+    }
+  }
 
   /**
    * @param {Readonly<{ body: string , recipientPublicKey: string , token: string }>} reqBody
@@ -242,14 +302,14 @@ class Mediator {
 
       await throwOnInvalidToken(token);
 
-      await API.Actions.sendMessage(recipientPublicKey, body, gun, user, Sea);
+      await API.Actions.sendMessage(recipientPublicKey, body, gun, user, mySEA);
 
       this.socket.emit(Action.SEND_MESSAGE, {
         ok: true,
         msg: null,
         origBody: reqBody
       });
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Action.SEND_MESSAGE, {
         ok: false,
         msg: e.message,
@@ -274,7 +334,7 @@ class Mediator {
         msg: null,
         origBody: body
       });
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Action.SET_AVATAR, {
         ok: false,
         msg: e.message,
@@ -299,7 +359,7 @@ class Mediator {
         msg: null,
         origBody: body
       });
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Action.SET_DISPLAY_NAME, {
         ok: false,
         msg: e.message,
@@ -326,7 +386,7 @@ class Mediator {
           origBody: body
         });
       }, user);
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Event.ON_AVATAR, {
         ok: false,
         msg: e.message,
@@ -351,7 +411,7 @@ class Mediator {
           origBody: body
         });
       }, user);
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Event.ON_BLACKLIST, {
         ok: false,
         msg: e.message,
@@ -379,9 +439,9 @@ class Mediator {
         },
         gun,
         user,
-        Sea
+        mySEA
       );
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Event.ON_CHATS, {
         ok: false,
         msg: e.message,
@@ -406,7 +466,7 @@ class Mediator {
           origBody: body
         });
       }, user);
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Event.ON_DISPLAY_NAME, {
         ok: false,
         msg: e.message,
@@ -431,7 +491,7 @@ class Mediator {
           origBody: body
         });
       }, user);
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Event.ON_HANDSHAKE_ADDRESS, {
         ok: false,
         msg: e.message,
@@ -459,9 +519,9 @@ class Mediator {
         },
         gun,
         user,
-        Sea
+        mySEA
       );
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Event.ON_RECEIVED_REQUESTS, {
         msg: e.message,
         ok: false,
@@ -489,9 +549,9 @@ class Mediator {
         },
         gun,
         user,
-        Sea
+        mySEA
       );
-    } catch (e) {
+    } catch (e) { console.log(e);
       this.socket.emit(Event.ON_SENT_REQUESTS, {
         msg: e.message,
         ok: false,
@@ -517,6 +577,9 @@ const isRegistering = () => _isRegistering;
 const authenticate = (alias, pass) => {
   return new Promise((res, rej) => {
     if (isAuthenticated()) {
+      API.Jobs.onAcceptedRequests(API.Events.onSentRequests, gun, user, mySEA)
+
+      // @ts-ignore
       res(user.is.pub)
       return
     }
@@ -542,6 +605,7 @@ const authenticate = (alias, pass) => {
       if (typeof ack.err === "string") {
         rej(new Error(ack.err));
       } else if (typeof ack.sea === "object") {
+        API.Jobs.onAcceptedRequests(API.Events.onSentRequests, gun, user, mySEA)
         res(ack.sea.pub);
       } else {
         rej(new Error("Unknown error."));
