@@ -21,3 +21,15 @@ exports.TRIED_TO_ACCEPT_AN_INVALID_REQUEST =
 exports.UNSUCCESSFUL_LOGOUT = "UNSUCCESSFUL_LOGOUT";
 
 exports.UNSUCCESSFUL_REQUEST_ACCEPT = "UNSUCCESSFUL_REQUEST_ACCEPT";
+
+/**
+ * Error thrown when trying to send a handshake request to an user for which
+ * there's already an successful handshake.
+ */
+exports.ALREADY_HANDSHAKED = "ALREADY_HANDSHAKED";
+
+/**
+ * Error thrown when trying to send a handshake request to an user for which
+ * there's already a handshake request on his current handshake node.
+ */
+exports.ALREADY_REQUESTED_HANDSHAKE = "ALREADY_REQUESTED_HANDSHAKE";
