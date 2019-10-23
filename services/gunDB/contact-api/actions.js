@@ -418,7 +418,6 @@ const register = (alias, pass, user) =>
   });
 
 /**
- * Sends a handshake to the
  * @param {string} handshakeAddress
  * @param {string} recipientPublicKey
  * @param {GUNNode} gun
@@ -458,39 +457,6 @@ const sendHandshakeRequest = async (
     throw new TypeError("recipientPublicKey is an string of length 0");
   }
 
-  const outgoingFeedID = await __createOutgoingFeed(
-    recipientPublicKey,
-    user,
-    SEA
-  );
-
-  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
-
-  const encryptedForMeOutgoingID = await SEA.encrypt(outgoingFeedID, mySecret);
-
-  console.warn("------------");
-  console.warn(
-    `writing to recipient to outgoing: recipientKEY:: ${recipientPublicKey} -- outgoingID: ${encryptedForMeOutgoingID}`
-  );
-  console.warn("------");
-
-  await new Promise((res, rej) => {
-    user
-      .get(Key.RECIPIENT_TO_OUTGOING)
-      .get(recipientPublicKey)
-      .put(encryptedForMeOutgoingID, ack => {
-        if (ack.err) {
-          rej(
-            new Error(
-              `Error writing to recipientToOutgoing on handshake request creation: ${ack.err}`
-            )
-          );
-        } else {
-          res();
-        }
-      });
-  });
-
   /** @type {string} */
   const recipientEpub = await new Promise((res, rej) => {
     gun
@@ -525,18 +491,102 @@ const sendHandshakeRequest = async (
       });
   });
 
-  const secret = await SEA.secret(recipientEpub, user._.sea);
-  const encryptedOutgoingFeedID = await SEA.encrypt(outgoingFeedID, secret);
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+  const ourSecret = await SEA.secret(recipientEpub, user._.sea);
+
+  // check if successful handshake is present
+
+  /** @type {boolean} */
+  const alreadyHandshaked = await new Promise((res, rej) => {
+    user
+      .get(Key.USER_TO_INCOMING)
+      .get(recipientPublicKey)
+      .once(inc => {
+        if (typeof inc !== "string") {
+          res(false);
+        } else {
+          if (inc.length === 0) {
+            rej(
+              new Error(
+                `sendHRWithInitialMsg()-> obtained encryptedIncomingId from user-to-incoming an string but of length 0`
+              )
+            );
+          } else {
+            res(true);
+          }
+        }
+      });
+  });
+
+  if (alreadyHandshaked) {
+    throw new Error(ErrorCode.ALREADY_HANDSHAKED);
+  }
+
+  const outgoingFeedID = await __createOutgoingFeed(
+    recipientPublicKey,
+    user,
+    SEA
+  );
+
+  const encryptedForUsOutgoingFeedID = await SEA.encrypt(
+    outgoingFeedID,
+    ourSecret
+  );
+
+  // save outgoing feed id to recipient-to-outgoing map
+
+  const encryptedForMeOutgoingID = await SEA.encrypt(outgoingFeedID, mySecret);
+
+  await new Promise((res, rej) => {
+    user
+      .get(Key.RECIPIENT_TO_OUTGOING)
+      .get(recipientPublicKey)
+      .put(encryptedForMeOutgoingID, ack => {
+        if (ack.err) {
+          rej(
+            new Error(
+              `Error writing to recipientToOutgoing on handshake request creation: ${ack.err}`
+            )
+          );
+        } else {
+          res();
+        }
+      });
+  });
+
+  // check that we have already sent a request to this user, on his current
+  // handshake node
+  const lastRequestIDSentToUser = await user
+    .get(Key.USER_TO_LAST_REQUEST_SENT)
+    .get(recipientPublicKey)
+    .then();
+
+  if (typeof lastRequestIDSentToUser === "string") {
+    /** @type {boolean} */
+    const alreadyContactedOnCurrHandshakeNode = await new Promise(res => {
+      gun
+        .user(recipientPublicKey)
+        .get(Key.CURRENT_HANDSHAKE_NODE)
+        .get(lastRequestIDSentToUser)
+        .once(data => {
+          res(typeof data !== "undefined");
+        });
+    });
+
+    if (alreadyContactedOnCurrHandshakeNode) {
+      throw new Error(ErrorCode.ALREADY_REQUESTED_HANDSHAKE);
+    }
+  }
 
   /** @type {HandshakeRequest} */
   const handshakeRequestData = {
-    response: encryptedOutgoingFeedID,
+    response: encryptedForUsOutgoingFeedID,
     from: user.is.pub,
     timestamp: Date.now()
   };
 
-  /** @type {GUNNode} */
-  const handshakeRequest = await new Promise((res, rej) => {
+  /** @type {string} */
+  const newHandshakeRequestID = await new Promise((res, rej) => {
     const hr = gun
       .get(Key.HANDSHAKE_NODES)
       .get(handshakeAddress)
@@ -544,10 +594,30 @@ const sendHandshakeRequest = async (
         if (ack.err) {
           rej(new Error(`Error trying to create request: ${ack.err}`));
         } else {
-          res(hr);
+          res(hr._.get);
         }
       });
   });
+
+  await new Promise((res, rej) => {
+    user
+      .get(Key.USER_TO_LAST_REQUEST_SENT)
+      .get(recipientPublicKey)
+      .put(newHandshakeRequestID, ack => {
+        if (ack.err) {
+          rej(new Error(ack.err));
+        } else {
+          res();
+        }
+      });
+  });
+
+  const handshakeRequest = gun
+    .get(Key.HANDSHAKE_NODES)
+    .get(handshakeAddress)
+    .get(newHandshakeRequestID);
+
+  // save request id to REQUEST_TO_USER
 
   const encryptedForMeRecipientPublicKey = await SEA.encrypt(
     recipientPublicKey,
@@ -559,7 +629,7 @@ const sendHandshakeRequest = async (
   await new Promise((res, rej) => {
     user
       .get(Key.REQUEST_TO_USER)
-      .get(handshakeRequest._["#"])
+      .get(newHandshakeRequestID)
       .put(encryptedForMeRecipientPublicKey, ack => {
         if (ack.err) {
           rej(
