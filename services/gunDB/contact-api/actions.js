@@ -522,6 +522,30 @@ const sendHandshakeRequest = async (
     throw new Error(ErrorCode.ALREADY_HANDSHAKED);
   }
 
+  // check that we have already sent a request to this user, on his current
+  // handshake node
+  const lastRequestIDSentToUser = await user
+    .get(Key.USER_TO_LAST_REQUEST_SENT)
+    .get(recipientPublicKey)
+    .then();
+
+  if (typeof lastRequestIDSentToUser === "string") {
+    /** @type {boolean} */
+    const alreadyContactedOnCurrHandshakeNode = await new Promise(res => {
+      gun
+        .user(recipientPublicKey)
+        .get(Key.CURRENT_HANDSHAKE_NODE)
+        .get(lastRequestIDSentToUser)
+        .once(data => {
+          res(typeof data !== "undefined");
+        });
+    });
+
+    if (alreadyContactedOnCurrHandshakeNode) {
+      throw new Error(ErrorCode.ALREADY_REQUESTED_HANDSHAKE);
+    }
+  }
+
   const outgoingFeedID = await __createOutgoingFeed(
     recipientPublicKey,
     user,
@@ -553,30 +577,6 @@ const sendHandshakeRequest = async (
         }
       });
   });
-
-  // check that we have already sent a request to this user, on his current
-  // handshake node
-  const lastRequestIDSentToUser = await user
-    .get(Key.USER_TO_LAST_REQUEST_SENT)
-    .get(recipientPublicKey)
-    .then();
-
-  if (typeof lastRequestIDSentToUser === "string") {
-    /** @type {boolean} */
-    const alreadyContactedOnCurrHandshakeNode = await new Promise(res => {
-      gun
-        .user(recipientPublicKey)
-        .get(Key.CURRENT_HANDSHAKE_NODE)
-        .get(lastRequestIDSentToUser)
-        .once(data => {
-          res(typeof data !== "undefined");
-        });
-    });
-
-    if (alreadyContactedOnCurrHandshakeNode) {
-      throw new Error(ErrorCode.ALREADY_REQUESTED_HANDSHAKE);
-    }
-  }
 
   /** @type {HandshakeRequest} */
   const handshakeRequestData = {
