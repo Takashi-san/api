@@ -35,13 +35,16 @@ export interface GUNNode {
   _: Soul;
   get(key: string): GUNNode;
   map(): GUNNode;
-  put(data: ValidDataValue | GUNNode, cb?: Callback): void;
+  put(data: ValidDataValue | GUNNode, cb?: Callback): GUNNode;
   on(this: GUNNode, cb: Listener): void;
   once(this: GUNNode, cb?: Listener): GUNNode;
   set(data: ValidDataValue | GUNNode, cb?: Callback): GUNNode;
   off(): void;
   user(): UserGUNNode;
   user(epub: string): GUNNode;
+
+  then(): Promise<ListenerData>;
+  then<T>(cb: (v: ListenerData) => T): Promise<ListenerData>;
 }
 
 export interface CreateAck {
