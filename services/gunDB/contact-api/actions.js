@@ -546,6 +546,26 @@ const sendHandshakeRequest = async (
     }
   }
 
+  const currentHandshakeNode = await gun
+    .user(recipientPublicKey)
+    .get(Key.CURRENT_HANDSHAKE_NODE)
+    .then();
+
+  if (
+    typeof currentHandshakeNode !== "object" ||
+    currentHandshakeNode === null
+  ) {
+    throw new TypeError(
+      "typeof currentHandshakeNode !== 'object' || currentHandshakeNode === null"
+    );
+  } else {
+    const currHandshakeAddr = currentHandshakeNode._["#"];
+
+    if (currHandshakeAddr !== handshakeAddress) {
+      throw new Error(ErrorCode.STALE_HANDSHAKE_ADDRESS);
+    }
+  }
+
   const outgoingFeedID = await __createOutgoingFeed(
     recipientPublicKey,
     user,
