@@ -119,7 +119,7 @@ class Mediator {
     socket.on(Action.ACCEPT_REQUEST, this.acceptRequest);
     socket.on(Action.BLACKLIST, this.blacklist);
     socket.on(Action.GENERATE_NEW_HANDSHAKE_NODE, this.generateHandshakeNode);
-    socket.on(Action.SEMD_HANDSHAKE_REQUEST, this.sendHandshakeRequest);
+    socket.on(Action.SEND_HANDSHAKE_REQUEST, this.sendHandshakeRequest);
     socket.on(Action.SEND_HANDSHAKE_REQUEST_WITH_INITIAL_MSG, this.sendHRWithInitialMsg)
     socket.on(Action.SEND_MESSAGE, this.sendMessage);
     socket.on(Action.SET_AVATAR, this.setAvatar);
@@ -247,13 +247,13 @@ class Mediator {
         mySEA
       );
 
-      this.socket.emit(Action.SEMD_HANDSHAKE_REQUEST, {
+      this.socket.emit(Action.SEND_HANDSHAKE_REQUEST, {
         ok: true,
         msg: null,
         origBody: body
       });
     } catch (e) { console.log(e);
-      this.socket.emit(Action.SEMD_HANDSHAKE_REQUEST, {
+      this.socket.emit(Action.SEND_HANDSHAKE_REQUEST, {
         ok: false,
         msg: e.message,
         origBody: body
