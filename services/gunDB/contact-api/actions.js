@@ -1,5 +1,5 @@
 /**
- * @prettier
+ * @format
  */
 const ErrorCode = require("./errorCode");
 const Key = require("./key");
@@ -31,6 +31,9 @@ const __createInitialMessage = () => ({
  * Create a an outgoing feed. The feed will have an initial special acceptance
  * message. Returns a promise that resolves to the id of the newly-created
  * outgoing feed.
+ *
+ * If an outgoing feed is already created for the recipient, then returns the id
+ * of that one.
  * @param {string} withPublicKey Public key of the intended recipient of the
  * outgoing feed that will be created.
  * @throws {Error} If the outgoing feed cannot be created or if the initial
@@ -41,56 +44,89 @@ const __createInitialMessage = () => ({
  * @returns {Promise<string>}
  */
 const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
-  try {
-    if (!user.is) {
-      throw new Error(ErrorCode.NOT_AUTH);
-    }
-    const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
-    const encryptedForMeRecipientPub = await SEA.encrypt(
-      withPublicKey,
-      mySecret
-    );
+  if (!user.is) {
+    throw new Error(ErrorCode.NOT_AUTH);
+  }
 
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+  const encryptedForMeRecipientPub = await SEA.encrypt(withPublicKey, mySecret);
+
+  const encryptedForMeOutgoingFeedID = await new Promise(res => {
+    user
+      .get(Key.RECIPIENT_TO_OUTGOING)
+      .get(withPublicKey)
+      .once(data => {
+        res(data);
+      });
+  });
+
+  let outgoingFeedID = "";
+
+  // if there was no stored outgoing, create an outgoing feed
+  if (typeof encryptedForMeOutgoingFeedID !== "string") {
     /** @type {PartialOutgoing} */
     const newPartialOutgoingFeed = {
       with: encryptedForMeRecipientPub
     };
 
-    /** @type {GUNNode} */
-    const outgoingFeedObj = await new Promise((res, rej) => {
-      const outFeed = user
+    /** @type {string} */
+    const newOutgoingFeedID = await new Promise((res, rej) => {
+      const _outFeedNode = user
         .get(Key.OUTGOINGS)
         .set(newPartialOutgoingFeed, ack => {
           if (ack.err) {
             rej(new Error(ack.err));
           } else {
-            res(outFeed);
+            res(_outFeedNode._.get);
           }
         });
     });
 
-    const outgoingFeedID = /** @type {string} */ (outgoingFeedObj._["#"]);
-
-    const outgoingFeed = user.get(Key.OUTGOINGS).get(outgoingFeedID);
+    if (typeof newOutgoingFeedID !== "string") {
+      throw new TypeError('typeof newOutgoingFeedID !== "string"');
+    }
 
     await new Promise((res, rej) => {
-      outgoingFeed.get(Key.MESSAGES).set(__createInitialMessage(), ack => {
-        if (ack.err) {
-          rej(new Error(ack.err));
-        } else {
-          res();
-        }
-      });
+      user
+        .get(Key.OUTGOINGS)
+        .get(newOutgoingFeedID)
+        .get(Key.MESSAGES)
+        .set(__createInitialMessage(), ack => {
+          if (ack.err) {
+            rej(new Error(ack.err));
+          } else {
+            res();
+          }
+        });
     });
 
-    return outgoingFeedID;
-  } catch (e) {
-    console.warn(
-      `Got an error ${e.message} setting the initial message on an outgoing feed. Will now try to null out the outgoing feed...`
-    );
-
-    throw e;
+    outgoingFeedID = newOutgoingFeedID;
   }
+
+  // otherwise decrypt stored outgoing
+  else {
+    outgoingFeedID = await SEA.decrypt(encryptedForMeOutgoingFeedID, mySecret);
+  }
+
+  if (typeof outgoingFeedID === "undefined") {
+    throw new TypeError(
+      '__createOutgoingFeed() -> typeof outgoingFeedID === "undefined"'
+    );
+  }
+
+  if (typeof outgoingFeedID !== "string") {
+    throw new TypeError(
+      "__createOutgoingFeed() -> expected outgoingFeedID to be an string"
+    );
+  }
+
+  if (outgoingFeedID.length === 0) {
+    throw new TypeError(
+      "__createOutgoingFeed() -> expected outgoingFeedID to be a populated string."
+    );
+  }
+
+  return outgoingFeedID;
 };
 
 /**
