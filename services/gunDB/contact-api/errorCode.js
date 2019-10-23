@@ -33,3 +33,9 @@ exports.ALREADY_HANDSHAKED = "ALREADY_HANDSHAKED";
  * there's already a handshake request on his current handshake node.
  */
 exports.ALREADY_REQUESTED_HANDSHAKE = "ALREADY_REQUESTED_HANDSHAKE";
+
+/**
+ * Error thrown when trying to send a handshake request to an user on an stale
+ * handshake address.
+ */
+exports.STALE_HANDSHAKE_ADDRESS = "STALE_HANDSHAKE_ADDRESS";
