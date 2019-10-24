@@ -51,7 +51,7 @@ const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
   const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
   const encryptedForMeRecipientPub = await SEA.encrypt(withPublicKey, mySecret);
 
-  const encryptedForMeOutgoingFeedID = await new Promise(res => {
+  const maybeEncryptedForMeOutgoingFeedID = await new Promise(res => {
     user
       .get(Key.RECIPIENT_TO_OUTGOING)
       .get(withPublicKey)
@@ -63,7 +63,7 @@ const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
   let outgoingFeedID = "";
 
   // if there was no stored outgoing, create an outgoing feed
-  if (typeof encryptedForMeOutgoingFeedID !== "string") {
+  if (typeof maybeEncryptedForMeOutgoingFeedID !== "string") {
     /** @type {PartialOutgoing} */
     const newPartialOutgoingFeed = {
       with: encryptedForMeRecipientPub
@@ -100,12 +100,37 @@ const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
         });
     });
 
+    const encryptedForMeNewOutgoingFeedID = await SEA.encrypt(
+      newOutgoingFeedID,
+      mySecret
+    );
+
+    if (typeof encryptedForMeNewOutgoingFeedID === 'undefined') {
+      throw new TypeError("typeof encryptedForMeNewOutgoingFeedID === 'undefined'")
+    }
+
+    await new Promise((res, rej) => {
+      user
+        .get(Key.RECIPIENT_TO_OUTGOING)
+        .get(withPublicKey)
+        .put(encryptedForMeNewOutgoingFeedID, ack => {
+          if (ack.err) {
+            rej(Error(ack.err));
+          } else {
+            res();
+          }
+        });
+    });
+
     outgoingFeedID = newOutgoingFeedID;
   }
 
   // otherwise decrypt stored outgoing
   else {
-    outgoingFeedID = await SEA.decrypt(encryptedForMeOutgoingFeedID, mySecret);
+    outgoingFeedID = await SEA.decrypt(
+      maybeEncryptedForMeOutgoingFeedID,
+      mySecret
+    );
   }
 
   if (typeof outgoingFeedID === "undefined") {
@@ -220,35 +245,11 @@ const acceptRequest = async (
       });
   });
 
-  const encryptedForMeOutgoingID = await SEA.encrypt(
-    newlyCreatedOutgoingFeedID,
-    mySecret
-  );
-
-  await new Promise((res, rej) => {
-    user
-      .get(Key.RECIPIENT_TO_OUTGOING)
-      .get(senderPublicKey)
-      .put(encryptedForMeOutgoingID, ack => {
-        if (ack.err) {
-          rej(new Error(ack.err));
-        } else {
-          res();
-        }
-      });
-  });
-
   ////////////////////////////////////////////////////////////////////////////
   // NOTE: perform non-reversable actions before destructive actions
   // In case any of the non-reversable actions reject.
   // In this case, writing to the response is the non-revesarble op.
   ////////////////////////////////////////////////////////////////////////////
-
-  console.log("-----");
-  console.log(
-    `newly created for us outgoing ID: ${newlyCreatedOutgoingFeedID}`
-  );
-  console.log("-----");
 
   const encryptedForUsOutgoingID = await SEA.encrypt(
     newlyCreatedOutgoingFeedID,
@@ -576,27 +577,6 @@ const sendHandshakeRequest = async (
     outgoingFeedID,
     ourSecret
   );
-
-  // save outgoing feed id to recipient-to-outgoing map
-
-  const encryptedForMeOutgoingID = await SEA.encrypt(outgoingFeedID, mySecret);
-
-  await new Promise((res, rej) => {
-    user
-      .get(Key.RECIPIENT_TO_OUTGOING)
-      .get(recipientPublicKey)
-      .put(encryptedForMeOutgoingID, ack => {
-        if (ack.err) {
-          rej(
-            new Error(
-              `Error writing to recipientToOutgoing on handshake request creation: ${ack.err}`
-            )
-          );
-        } else {
-          res();
-        }
-      });
-  });
 
   /** @type {HandshakeRequest} */
   const handshakeRequestData = {
