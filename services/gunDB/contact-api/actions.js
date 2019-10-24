@@ -49,6 +49,11 @@ const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
   }
 
   const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+  if (typeof mySecret !== "string") {
+    throw new TypeError(
+      "__createOutgoingFeed() -> typeof mySecret !== 'string'"
+    );
+  }
   const encryptedForMeRecipientPub = await SEA.encrypt(withPublicKey, mySecret);
 
   const maybeEncryptedForMeOutgoingFeedID = await new Promise(res => {
@@ -105,8 +110,10 @@ const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
       mySecret
     );
 
-    if (typeof encryptedForMeNewOutgoingFeedID === 'undefined') {
-      throw new TypeError("typeof encryptedForMeNewOutgoingFeedID === 'undefined'")
+    if (typeof encryptedForMeNewOutgoingFeedID === "undefined") {
+      throw new TypeError(
+        "typeof encryptedForMeNewOutgoingFeedID === 'undefined'"
+      );
     }
 
     await new Promise((res, rej) => {
@@ -127,10 +134,18 @@ const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
 
   // otherwise decrypt stored outgoing
   else {
-    outgoingFeedID = await SEA.decrypt(
+    const decryptedOID = await SEA.decrypt(
       maybeEncryptedForMeOutgoingFeedID,
       mySecret
     );
+
+    if (typeof decryptedOID !== "string") {
+      throw new TypeError(
+        "__createOutgoingFeed() -> typeof decryptedOID !== 'string'"
+      );
+    }
+
+    outgoingFeedID = decryptedOID;
   }
 
   if (typeof outgoingFeedID === "undefined") {
@@ -220,8 +235,14 @@ const acceptRequest = async (
   });
 
   const ourSecret = await SEA.secret(requestorEpub, user._.sea);
+  if (typeof ourSecret !== "string") {
+    throw new TypeError("typeof ourSecret !== 'string'");
+  }
 
   const incomingID = await SEA.decrypt(encryptedForUsIncomingID, ourSecret);
+  if (typeof incomingID !== "string") {
+    throw new TypeError("typeof incomingID !== 'string'");
+  }
 
   const newlyCreatedOutgoingFeedID = await outgoingFeedCreator(
     senderPublicKey,
@@ -230,6 +251,9 @@ const acceptRequest = async (
   );
 
   const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+  if (typeof mySecret !== "string") {
+    throw new TypeError("acceptRequest() -> typeof mySecret !== 'string'");
+  }
   const encryptedForMeIncomingID = await SEA.encrypt(incomingID, mySecret);
 
   await new Promise((res, rej) => {
@@ -493,7 +517,17 @@ const sendHandshakeRequest = async (
   });
 
   const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+  if (typeof mySecret !== "string") {
+    throw new TypeError(
+      "sendHandshakeRequest() -> typeof mySecret !== 'string'"
+    );
+  }
   const ourSecret = await SEA.secret(recipientEpub, user._.sea);
+  if (typeof ourSecret !== "string") {
+    throw new TypeError(
+      "sendHandshakeRequest() -> typeof ourSecret !== 'string'"
+    );
+  }
 
   // check if successful handshake is present
 
@@ -758,6 +792,10 @@ const sendMessage = async (recipientPublicKey, body, gun, user, SEA) => {
     });
 
     const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+    if (typeof mySecret !== "string") {
+      throw new TypeError("sendMessage() -> typeof mySecret !== 'string'");
+    }
+
     const outID = await SEA.decrypt(encryptedForMeOutgoingID, mySecret);
 
     if (typeof outID !== "string") {
@@ -774,6 +812,9 @@ const sendMessage = async (recipientPublicKey, body, gun, user, SEA) => {
   })();
 
   const ourSecret = await SEA.secret(recipientEpub, user._.sea);
+  if (typeof ourSecret !== "string") {
+    throw new TypeError("sendMessage() -> typeof ourSecret !== 'string'");
+  }
   const encryptedBody = await SEA.encrypt(body, ourSecret);
 
   const newMessage = {

@@ -46,6 +46,9 @@ exports.onAcceptedRequests = async (
 
   // Used only for decrypting request-to-user-map
   const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+  if (typeof mySecret !== "string") {
+    throw new TypeError("typeof mySecret !== 'string'");
+  }
 
   onSentRequestsFactory(async sentRequests => {
     for (const [reqKey, req] of Object.entries(sentRequests)) {
@@ -80,13 +83,23 @@ exports.onAcceptedRequests = async (
         });
 
         if (typeof encryptedForMeRecipientPub === "undefined") {
-          throw new TypeError("typeof recipientPub === 'undefined'");
+          console.log(
+            "onAcceptedRequests() -> typeof encryptedForMeRecipientPub === 'undefined'"
+          );
+          return;
         }
 
         const recipientPub = await SEA.decrypt(
           encryptedForMeRecipientPub,
           mySecret
         );
+
+        if (typeof recipientPub !== "string") {
+          console.log(
+            "onAcceptedRequests() -> typeof recipientPub !== 'string'"
+          );
+          return;
+        }
 
         /** @type {string} */
         const recipientEpub = await new Promise((res, rej) => {
@@ -118,10 +131,18 @@ exports.onAcceptedRequests = async (
         // The response can be decrypted with the same secret regardless of who
         // wrote to it last (see HandshakeRequest definition).
         const ourSecret = await SEA.secret(recipientEpub, user._.sea);
+        if (typeof ourSecret !== "string") {
+          console.log("onAcceptedRequests() -> typeof ourSecret !== 'string'");
+          return;
+        }
 
         // This could be our feed ID for the recipient, or the recipient's feed
         // id if he accepted the request.
         const feedID = await SEA.decrypt(req.response, ourSecret);
+        if (typeof feedID !== "string") {
+          console.log("onAcceptedRequests() -> typeof feedID !== 'string'");
+          return;
+        }
 
         // Check that this feed exists on the recipient's outgoing feeds
         const wasAccepted = await new Promise(res => {

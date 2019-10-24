@@ -35,6 +35,10 @@ const __onOutgoingMessage = async (outgoingKey, cb, gun, user, SEA) => {
   }
 
   const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+  if (typeof mySecret !== "string") {
+    throw new TypeError("typeof mySecret !== 'string'");
+  }
+
   const outgoing = user.get(Key.OUTGOINGS).get(outgoingKey);
 
   /** @type {string} */
@@ -59,6 +63,12 @@ const __onOutgoingMessage = async (outgoingKey, cb, gun, user, SEA) => {
     mySecret
   );
 
+  if (typeof recipientPublicKey !== "string") {
+    throw new TypeError(
+      "__onOutgoingMessage() -> typeof recipientPublicKey !== 'string'"
+    );
+  }
+
   /** @type {string} */
   const recipientEpub = await new Promise((res, rej) => {
     gun
@@ -82,6 +92,12 @@ const __onOutgoingMessage = async (outgoingKey, cb, gun, user, SEA) => {
 
   const ourSecret = await SEA.secret(recipientEpub, user._.sea);
 
+  if (typeof ourSecret !== "string") {
+    throw new TypeError(
+      "__onOutgoingMessage() -> typeof ourSecret !== 'string'"
+    );
+  }
+
   outgoing
     .get(Key.MESSAGES)
     .map()
@@ -91,15 +107,21 @@ const __onOutgoingMessage = async (outgoingKey, cb, gun, user, SEA) => {
         return;
       }
 
-      const encryptedBody = msg.body;
-      const decryptedBody =
-        encryptedBody === Actions.INITIAL_MSG
-          ? encryptedBody
-          : await SEA.decrypt(encryptedBody, ourSecret);
+      let { body } = msg;
+
+      if (body !== Actions.INITIAL_MSG) {
+        const decrypted = await SEA.decrypt(body, ourSecret);
+
+        if (typeof decrypted !== "string") {
+          console.log("__onOutgoingMessage() -> typeof decrypted !== 'string'");
+        } else {
+          body = decrypted;
+        }
+      }
 
       cb(
         {
-          body: decryptedBody,
+          body,
           timestamp: msg.timestamp
         },
         key
@@ -118,11 +140,19 @@ const __onSentRequestToUser = async (cb, user, SEA) => {
   /** @type {Record<string, string>} */
   const requestToUser = {};
 
+  cb(requestToUser);
+
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
 
   const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+
+  if (typeof mySecret !== "string") {
+    throw new TypeError(
+      "__onSentRequestToUser() -> typeof mySecret !== 'string'"
+    );
+  }
 
   user
     .get(Key.REQUEST_TO_USER)
@@ -139,6 +169,11 @@ const __onSentRequestToUser = async (cb, user, SEA) => {
       }
 
       const userPub = await SEA.decrypt(encryptedUserPub, mySecret);
+
+      if (typeof userPub !== "string") {
+        console.log(`__onSentRequestToUser() -> typeof userPub !== 'string'`);
+        return;
+      }
 
       requestToUser[requestID] = userPub;
 
@@ -161,6 +196,10 @@ const __onUserToIncoming = async (cb, user, SEA) => {
   const userToOutgoing = {};
 
   const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+
+  if (typeof mySecret !== "string") {
+    throw new TypeError("__onUserToIncoming() -> typeof mySecret !== 'string'");
+  }
 
   user
     .get(Key.USER_TO_INCOMING)
@@ -352,6 +391,8 @@ const onIncomingMessages = (cb, userPK, incomingFeedID, gun, user, SEA) => {
    */
   const messages = {};
 
+  cb(messages);
+
   otherUser
     .get(Key.OUTGOINGS)
     .get(incomingFeedID)
@@ -362,10 +403,6 @@ const onIncomingMessages = (cb, userPK, incomingFeedID, gun, user, SEA) => {
         console.warn("non-message received");
         return;
       }
-
-      const msg = data;
-
-      const encryptedBody = msg.body;
 
       /** @type {string} */
       const recipientEpub = await new Promise((res, rej) => {
@@ -392,12 +429,27 @@ const onIncomingMessages = (cb, userPK, incomingFeedID, gun, user, SEA) => {
 
       const secret = await SEA.secret(recipientEpub, user._.sea);
 
+      if (typeof secret !== "string") {
+        console.log("onIncomingMessages() -> typeof secret !== 'string'");
+        return;
+      }
+
+      let { body } = data;
+
+      if (body !== Actions.INITIAL_MSG) {
+        const decrypted = await SEA.decrypt(body, secret);
+
+        if (typeof decrypted !== "string") {
+          console.log("onIncommingMessages() -> typeof decrypted !== 'string'");
+          return;
+        }
+
+        body = decrypted;
+      }
+
       messages[key] = {
-        body:
-          encryptedBody === Actions.INITIAL_MSG
-            ? Actions.INITIAL_MSG
-            : await SEA.decrypt(encryptedBody, secret),
-        timestamp: msg.timestamp
+        body,
+        timestamp: data.timestamp
       };
 
       cb(messages);
@@ -424,11 +476,16 @@ const onOutgoing = async (
   }
 
   const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+  if (typeof mySecret !== "string") {
+    throw new TypeError("onOutgoing() -> typeof mySecret !== 'string'");
+  }
 
   /**
    * @type {Record<string, Outgoing>}
    */
   const outgoings = {};
+
+  cb(outgoings);
 
   /**
    * @type {string[]}
@@ -450,6 +507,13 @@ const onOutgoing = async (
         data.with,
         mySecret
       );
+
+      if (typeof decryptedRecipientPublicKey !== "string") {
+        console.log(
+          "onOutgoing() -> typeof decryptedRecipientPublicKey !== 'string'"
+        );
+        return;
+      }
 
       outgoings[key] = {
         messages: outgoings[key] ? outgoings[key].messages : {},
@@ -791,7 +855,15 @@ const onSimplerReceivedRequests = (cb, gun, user, SEA) => {
       console.log("------------------------------");
 
       const ourSecret = await SEA.secret(requestorEpub, user._.sea);
+      if (typeof ourSecret !== 'string') {
+        console.log("onSimplerReceivedRequests() -> typeof ourSecret !== 'string'")
+        return
+      }
       const decryptedResponse = await SEA.decrypt(req.response, ourSecret);
+      if (typeof decryptedResponse !== 'string') {
+        console.log("onSimplerReceivedRequests() -> typeof decryptedResponse !== 'string'")
+        return  
+      }
 
       console.log("------------------------------");
       console.log(`encryptedResponse: ${req.response}`);

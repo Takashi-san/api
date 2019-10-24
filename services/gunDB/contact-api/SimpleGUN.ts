@@ -88,9 +88,12 @@ export interface UserGUNNode extends GUNNode {
 
 export interface ISEA {
   encrypt(message: string, senderSecret: string): Promise<string>;
-  decrypt(encryptedMessage: string, recipientSecret: string): Promise<string>;
+  decrypt(
+    encryptedMessage: string,
+    recipientSecret: string
+  ): Promise<string | undefined>;
   secret(
     recipientOrSenderEpub: string,
     recipientOrSenderUserPair: UserPair
-  ): Promise<string>;
+  ): Promise<string | undefined>;
 }
