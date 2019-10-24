@@ -48,22 +48,23 @@ class Auth {
     });
   };
 
-  validateToken(token) {
-    let key = jwt.decode(token).data.timestamp;
-    return this.readSecrets().then(allSecrets => {
-      return new Promise((resolve, reject) => {
-        let secret = allSecrets[key];
-        let decoded = jwt.verify(token, secret, function(err, decoded) {
-          if (err) {
-            console.log('validateToken err', err);
-            reject(err);
-          } else {
-            console.log('decoded', decoded);
-            resolve({valid: true});
-          }
-        });
+  async validateToken(token) {
+    try {
+      const key = jwt.decode(token).data.timestamp;
+      const secrets = await this.readSecrets()
+      const secret = allSecrets[key];
+      const decoded = jwt.verify(token, secret, function(err, decoded) {
+        if (err) {
+          console.log('validateToken err', err);
+          reject(err);
+        } else {
+          console.log('decoded', decoded);
+          resolve({valid: true});
+        }
       });
-    })
+    } catch(err) {
+      reject(err);
+    }
   };
 
 }
