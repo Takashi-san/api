@@ -277,8 +277,9 @@ module.exports = (
     });
   });
 
-  app.post("/api/lnd/wallet", (req, res) => {
+  app.post("/api/lnd/wallet", async (req, res) => {
     const { password, alias } = req.body;
+    const healthResponse = await checkHealth();
     if (!alias) {
       return res.status(400).json({
         field: "alias",
@@ -293,6 +294,20 @@ module.exports = (
       });
     }
 
+    if (password.length < 8) {
+      return res.status(400).json({
+        field: "password",
+        message: "Please specify a password that's longer than 8 characters"
+      });
+    }
+
+    if (healthResponse.LNDStatus.service !== "walletUnlocker") {
+      return res.status(400).json({
+        field: "wallet",
+        message: "Wallet is already unlocked"
+      });
+    }
+
     walletUnlocker.genSeed({}, async (genSeedErr, genSeedResponse) => {
       if (genSeedErr) {
         logger.debug("GenSeed Error:", genSeedErr);
@@ -302,7 +317,7 @@ module.exports = (
           const message = genSeedErr.details;
           return res
             .status(400)
-            .send({ field: "health", message, success: false });
+            .send({ field: "GenSeed", message, success: false });
         } else {
           return res
             .status(500)
