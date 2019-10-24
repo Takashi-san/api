@@ -167,11 +167,12 @@ module.exports = (
 
         await recreateLnServices();
 
-        if (health.LNDStatus.walletStatus === "locked") {
+        const publicKey = await GunDB.authenticate(alias, password);
+
+        if (health.LNDStatus.walletStatus === "locked" && publicKey) {
           await unlockWallet(password);
         }
 
-        const publicKey = await GunDB.authenticate(alias, password);
 
         // Send an event to update lightning's status
         mySocketsEvents.emit("updateLightning");
