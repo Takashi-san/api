@@ -756,7 +756,7 @@ const onSimplerReceivedRequests = (cb, gun, user, SEA) => {
         return;
       }
 
-      const requestorEpub = await new Promise((res, rej) =>
+      const requestorEpub = await new Promise((res, rej) => {
         gun
           .user(req.from)
           .get("epub")
@@ -775,8 +775,8 @@ const onSimplerReceivedRequests = (cb, gun, user, SEA) => {
               }
               res(epub);
             }
-          })
-      );
+          });
+      });
 
       console.log("------------------------------");
       console.log(`requestorEpub: ${requestorEpub}`);
