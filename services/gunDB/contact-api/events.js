@@ -1093,6 +1093,8 @@ const onSimplerSentRequests = (cb, gun, user, SEA) => {
                 callCB();
               } else {
                 console.warn("non handshake request received");
+                console.warn(sr)
+                console.warn("/non handshake request received");
               }
             });
         }
