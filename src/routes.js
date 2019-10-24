@@ -316,6 +316,10 @@ module.exports = (
         wallet_password: Buffer.from(password, "utf8"),
         cipher_seed_mnemonic: mnemonicPhrase
       };
+
+      // Register user before creating wallet
+      const publicKey = await GunDB.register(alias, password);
+
       walletUnlocker.initWallet(
         walletArgs,
         async (initWalletErr, initWalletResponse) => {
@@ -365,7 +369,6 @@ module.exports = (
                 lightning = lnServices.lightning;
                 walletUnlocker = lnServices.walletUnlocker;
                 const token = await auth.generateToken();
-                const publicKey = await GunDB.register(alias, password);
                 return res.json({
                   mnemonicPhrase: mnemonicPhrase,
                   authorization: token,
