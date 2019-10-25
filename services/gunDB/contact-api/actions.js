@@ -289,7 +289,7 @@ const acceptRequest = async (
         if (ack.err) {
           rej(new Error(ack.err));
         } else {
-          res;
+          res();
         }
       }
     );
