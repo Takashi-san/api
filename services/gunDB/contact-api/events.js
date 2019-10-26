@@ -46,14 +46,10 @@ const __onOutgoingMessage = async (outgoingKey, cb, gun, user, SEA) => {
     outgoing.get("with").once(erpk => {
       if (typeof erpk !== "string") {
         rej(new TypeError("Expected outgoing.get('with') to be an string."));
+      } else if (erpk.length === 0) {
+        rej(new TypeError("Expected outgoing.get('with') to be a populated."));
       } else {
-        if (erpk.length === 0) {
-          rej(
-            new TypeError("Expected outgoing.get('with') to be a populated.")
-          );
-        } else {
-          res(erpk);
-        }
+        res(erpk);
       }
     });
   });
@@ -242,9 +238,8 @@ const onAvatar = (cb, user) => {
   // Initial value if avvatar is undefined in gun
   cb(null);
 
-  const u = /** @type {UserGUNNode} */ (user);
-
-  u.get(Key.PROFILE)
+  user
+    .get(Key.PROFILE)
     .get(Key.AVATAR)
     .on(avatar => {
       if (typeof avatar === "string" || avatar === null) {
@@ -354,12 +349,11 @@ const onDisplayName = (cb, user) => {
     throw new Error(ErrorCode.NOT_AUTH);
   }
 
-  const u = /** @type {UserGUNNode} */ (user);
-
   // Initial value if display name is undefined in gun
   cb(null);
 
-  u.get(Key.PROFILE)
+  user
+    .get(Key.PROFILE)
     .get(Key.DISPLAY_NAME)
     .on(displayName => {
       if (typeof displayName === "string" || displayName === null) {
@@ -492,9 +486,8 @@ const onOutgoing = async (
    */
   const outgoingsWithMessageListeners = [];
 
-  const u = /** @type {UserGUNNode} */ (user);
-
-  u.get(Key.OUTGOINGS)
+  user
+    .get(Key.OUTGOINGS)
     .map()
     .on(async (data, key) => {
       if (!Schema.isPartialOutgoing(data)) {
@@ -558,9 +551,8 @@ const onSentRequests = (cb, user) => {
    */
   const sentRequests = {};
 
-  const u = /** @type {UserGUNNode} */ (user);
-
-  u.get(Key.SENT_REQUESTS)
+  user
+    .get(Key.SENT_REQUESTS)
     .map()
     .on((req, reqKey) => {
       if (!Schema.isHandshakeRequest(req)) {
@@ -626,7 +618,7 @@ const onChats = (cb, gun, user, SEA) => {
     chats.forEach(chat => {
       chat.messages = chat.messages
         .slice(0)
-        .sort((a, b) => a.timestamp - b.timestamp);
+        .sort((msgA, msgB) => msgA.timestamp - msgB.timestamp);
     });
 
     cb(chats);
@@ -648,10 +640,10 @@ const onChats = (cb, gun, user, SEA) => {
           };
         }
 
-        const messages = recipientPKToChat[recipientPK].messages;
+        const { messages } = recipientPKToChat[recipientPK];
 
         for (const [msgK, msg] of Object.entries(outgoing.messages)) {
-          if (!messages.find(m => m.id === msgK)) {
+          if (!messages.find(_msg => _msg.id === msgK)) {
             messages.push({
               body: msg.body,
               id: msgK,
@@ -696,9 +688,9 @@ const onChats = (cb, gun, user, SEA) => {
                 `msgs for recipientPK: ${recipientPK}: ${Object.values(msgs)}`
               );
               for (const [msgK, msg] of Object.entries(msgs)) {
-                const messages = chat.messages;
+                const { messages } = chat;
 
-                if (!messages.find(m => m.id === msgK)) {
+                if (!messages.find(_msg => _msg.id === msgK)) {
                   messages.push({
                     body: msg.body,
                     id: msgK,
@@ -782,7 +774,7 @@ const onSimplerReceivedRequests = (cb, gun, user, SEA) => {
   user
     .get(Key.USER_TO_INCOMING)
     .map()
-    .on(async (_, userPK) => {
+    .on((_, userPK) => {
       if (!user.is) {
         console.warn("!user.is");
         return;
@@ -795,13 +787,15 @@ const onSimplerReceivedRequests = (cb, gun, user, SEA) => {
     const pendingReceivedRequests = Object.values(idToReceivedRequest);
 
     // sort from newest to oldest
-    pendingReceivedRequests.sort((a, b) => b.timestamp - a.timestamp);
+    pendingReceivedRequests.sort(
+      (reqA, reqB) => reqB.timestamp - reqA.timestamp
+    );
 
     // in case the requestor mistakenly sent a dupe request, remove the oldest
     // one
     const withoutDups = uniqBy(pendingReceivedRequests, rr => rr.requestorPK);
     // sort again from oldest to newest
-    withoutDups.sort((a, b) => a.timestamp - b.timestamp);
+    withoutDups.sort((reqA, reqB) => reqA.timestamp - reqB.timestamp);
 
     cb(
       // remove already accepted requestors
@@ -855,14 +849,18 @@ const onSimplerReceivedRequests = (cb, gun, user, SEA) => {
       console.log("------------------------------");
 
       const ourSecret = await SEA.secret(requestorEpub, user._.sea);
-      if (typeof ourSecret !== 'string') {
-        console.log("onSimplerReceivedRequests() -> typeof ourSecret !== 'string'")
-        return
+      if (typeof ourSecret !== "string") {
+        console.log(
+          "onSimplerReceivedRequests() -> typeof ourSecret !== 'string'"
+        );
+        return;
       }
       const decryptedResponse = await SEA.decrypt(req.response, ourSecret);
-      if (typeof decryptedResponse !== 'string') {
-        console.log("onSimplerReceivedRequests() -> typeof decryptedResponse !== 'string'")
-        return  
+      if (typeof decryptedResponse !== "string") {
+        console.log(
+          "onSimplerReceivedRequests() -> typeof decryptedResponse !== 'string'"
+        );
+        return;
       }
 
       console.log("------------------------------");
@@ -978,14 +976,14 @@ const onSimplerSentRequests = (cb, gun, user, SEA) => {
       ));
 
     // from newest to oldest
-    sentRequests.sort((a, b) => b.timestamp - a.timestamp);
+    sentRequests.sort((reqA, reqB) => reqB.timestamp - reqA.timestamp);
 
     // since it is reverse sorted, uniqBy will keep the LATEST  sent request for
     // a given recipient
     const withoutDups = uniqBy(sentRequests, sr => sr.recipientPublicKey);
 
     // sort them from oldest to newest
-    withoutDups.sort((a, b) => a.timestamp - b.timestamp);
+    withoutDups.sort((reqA, reqB) => reqA.timestamp - reqB.timestamp);
 
     cb(withoutDups);
   };
@@ -995,7 +993,7 @@ const onSimplerSentRequests = (cb, gun, user, SEA) => {
   user
     .get(Key.USER_TO_INCOMING)
     .map()
-    .on(async (_, userPK) => {
+    .on((_, userPK) => {
       if (!user.is) {
         console.warn("!user.is");
         return;
@@ -1093,7 +1091,7 @@ const onSimplerSentRequests = (cb, gun, user, SEA) => {
                 callCB();
               } else {
                 console.warn("non handshake request received");
-                console.warn(sr)
+                console.warn(sr);
                 console.warn("/non handshake request received");
               }
             });

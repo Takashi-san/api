@@ -203,6 +203,8 @@ const acceptRequest = async (
     from: senderPublicKey
   } = await new Promise((res, rej) => {
     requestNode.once(hr => {
+
+      
       if (!isHandshakeRequest(hr)) {
         rej(new Error(ErrorCode.TRIED_TO_ACCEPT_AN_INVALID_REQUEST));
         return;
@@ -220,16 +222,14 @@ const acceptRequest = async (
       .once(epub => {
         if (typeof epub !== "string") {
           rej(new Error("Expected gun.user(pub).get(epub) to be an string."));
+        } else if (epub.length === 0) {
+          rej(
+            new Error(
+              "Expected gun.user(pub).get(epub) to be a populated string."
+            )
+          );
         } else {
-          if (epub.length === 0) {
-            rej(
-              new Error(
-                "Expected gun.user(pub).get(epub) to be a populated string."
-              )
-            );
-          } else {
-            res(epub);
-          }
+          res(epub);
         }
       });
   });
@@ -319,7 +319,7 @@ const authenticate = (user, pass, userNode) =>
       throw new TypeError("expected pass to have length greater than zero");
     }
 
-    if (!!userNode.is) {
+    if (typeof userNode.is === "undefined") {
       throw new Error(ErrorCode.ALREADY_AUTH);
     }
 
@@ -374,9 +374,9 @@ const generateNewHandshakeNode = (gun, user) =>
         if (ack.err) {
           reject(new Error(ack.err));
         } else {
-          user.get(Key.CURRENT_HANDSHAKE_NODE).put(newHandshakeNode, ack => {
-            if (ack.err) {
-              reject(new Error(ack.err));
+          user.get(Key.CURRENT_HANDSHAKE_NODE).put(newHandshakeNode, _ack => {
+            if (_ack.err) {
+              reject(new Error(_ack.err));
             } else {
               resolve();
             }
@@ -402,9 +402,9 @@ const logout = user => {
 
   if (logoutWasSuccessful) {
     return Promise.resolve();
-  } else {
-    return Promise.reject(new Error(ErrorCode.UNSUCCESSFUL_LOGOUT));
   }
+
+  return Promise.reject(new Error(ErrorCode.UNSUCCESSFUL_LOGOUT));
 };
 
 /**
@@ -415,8 +415,6 @@ const logout = user => {
  */
 const register = (alias, pass, user) =>
   new Promise((resolve, reject) => {
-    const u = /** @type {UserGUNNode} */ (user);
-
     if (typeof alias !== "string") {
       throw new TypeError();
     }
@@ -433,7 +431,7 @@ const register = (alias, pass, user) =>
       throw new Error();
     }
 
-    u.create(alias, pass, ack => {
+    user.create(alias, pass, ack => {
       if (ack.err) {
         reject(new Error(ack.err));
       } else {
@@ -498,20 +496,18 @@ const sendHandshakeRequest = async (
               `Expected gun.user(pub).get(epub) to be an string. Instead got: ${typeof epub}`
             )
           );
-        } else {
-          if (epub.length === 0) {
-            console.log(
-              "sendHandshakeRequest()-> Expected gun.user(pub).get(epub) to be a populated string."
-            );
+        } else if (epub.length === 0) {
+          console.log(
+            "sendHandshakeRequest()-> Expected gun.user(pub).get(epub) to be a populated string."
+          );
 
-            rej(
-              new Error(
-                "Expected gun.user(pub).get(epub) to be a populated string."
-              )
-            );
-          } else {
-            res(epub);
-          }
+          rej(
+            new Error(
+              "Expected gun.user(pub).get(epub) to be a populated string."
+            )
+          );
+        } else {
+          res(epub);
         }
       });
   });
@@ -539,16 +535,14 @@ const sendHandshakeRequest = async (
       .once(inc => {
         if (typeof inc !== "string") {
           res(false);
+        } else if (inc.length === 0) {
+          rej(
+            new Error(
+              `sendHRWithInitialMsg()-> obtained encryptedIncomingId from user-to-incoming an string but of length 0`
+            )
+          );
         } else {
-          if (inc.length === 0) {
-            rej(
-              new Error(
-                `sendHRWithInitialMsg()-> obtained encryptedIncomingId from user-to-incoming an string but of length 0`
-              )
-            );
-          } else {
-            res(true);
-          }
+          res(true);
         }
       });
   });
@@ -614,8 +608,8 @@ const sendHandshakeRequest = async (
 
   /** @type {HandshakeRequest} */
   const handshakeRequestData = {
-    response: encryptedForUsOutgoingFeedID,
     from: user.is.pub,
+    response: encryptedForUsOutgoingFeedID,
     timestamp: Date.now()
   };
 
@@ -932,16 +926,14 @@ const sendHRWithInitialMsg = async (
       .once(inc => {
         if (typeof inc !== "string") {
           res(false);
+        } else if (inc.length === 0) {
+          rej(
+            new Error(
+              `sendHRWithInitialMsg()-> obtained encryptedIncomingId from user-to-incoming an string but of length 0`
+            )
+          );
         } else {
-          if (inc.length === 0) {
-            rej(
-              new Error(
-                `sendHRWithInitialMsg()-> obtained encryptedIncomingId from user-to-incoming an string but of length 0`
-              )
-            );
-          } else {
-            res(true);
-          }
+          res(true);
         }
       });
   });
@@ -970,7 +962,7 @@ module.exports = {
   register,
   sendHandshakeRequest,
   sendMessage,
+  sendHRWithInitialMsg,
   setAvatar,
-  setDisplayName,
-  sendHRWithInitialMsg
+  setDisplayName
 };
