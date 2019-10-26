@@ -34,38 +34,68 @@ module.exports = (
     walletUnlocker.getInfo({}, async (err, response) => {
       if (err) {
         console.error(err);
-        resolve({ service: "walletUnlocker", message: err.message, walletStatus: "locked", success: false });
+        resolve({
+          service: "walletUnlocker",
+          message: err.message,
+          walletStatus: "locked",
+          success: false
+        });
         return;
       }
 
-      resolve({ service: "walletUnlocker", message: response, walletStatus: "locked", success: true });
+      resolve({
+        service: "walletUnlocker",
+        message: response,
+        walletStatus: "locked",
+        success: true
+      });
     });
   };
 
-  const getAvailableService = () => new Promise((resolve, reject) => {
-    lightning.getInfo({}, async (err, response) => {
-      if (err) {
-        if (err.message.includes("unknown service lnrpc.Lightning")) {
-          resolve({ service: "walletUnlocker", message: "Wallet locked", walletStatus: "locked", success: true })
-        } else if (err.code === 14) {
-          resolve({ service: "unknown", message: "Failed to connect to LND server, make sure it's up and running.", walletStatus: "unknown", success: false })
-        } else {
-          reject({ service: "lightning", message: err.message, walletStatus: "unlocked", success: false })
+  const getAvailableService = () =>
+    new Promise((resolve, reject) => {
+      lightning.getInfo({}, async (err, response) => {
+        if (err) {
+          if (err.message.includes("unknown service lnrpc.Lightning")) {
+            resolve({
+              service: "walletUnlocker",
+              message: "Wallet locked",
+              walletStatus: "locked",
+              success: true
+            });
+          } else if (err.code === 14) {
+            resolve({
+              service: "unknown",
+              message:
+                "Failed to connect to LND server, make sure it's up and running.",
+              walletStatus: "unknown",
+              success: false
+            });
+          } else {
+            reject({
+              service: "lightning",
+              message: err.message,
+              walletStatus: "unlocked",
+              success: false
+            });
+          }
         }
-      }
 
-      resolve({ service: "lightning", message: response, walletStatus: "unlocked", success: true });
+        resolve({
+          service: "lightning",
+          message: response,
+          walletStatus: "unlocked",
+          success: true
+        });
+      });
     });
-  });
 
   const checkHealth = () => {
     return new Promise(async (resolve, reject) => {
       const serviceStatus = await getAvailableService();
       const LNDStatus = serviceStatus;
       try {
-        const APIHealth = await Http.get(
-          `http://localhost:${serverPort}/ping`
-        );
+        const APIHealth = await Http.get(`http://localhost:${serverPort}/ping`);
         const APIStatus = {
           message: APIHealth.data,
           responseTime: APIHealth.headers["x-response-time"],
@@ -116,10 +146,10 @@ module.exports = (
             reject(unlockErr);
             return;
           }
-  
+
           resolve(unlockResponse);
         });
-      } catch(err) {
+      } catch (err) {
         console.error(err);
         if (err.message === "unknown service lnrpc.WalletUnlocker") {
           resolve({
@@ -173,7 +203,6 @@ module.exports = (
           await unlockWallet(password);
         }
 
-
         // Send an event to update lightning's status
         mySocketsEvents.emit("updateLightning");
 
@@ -190,7 +219,14 @@ module.exports = (
         return true;
       } else {
         res.status(500);
-        res.send({ field: "health", message: health.LNDStatus.message.split('UNKNOWN: ').slice(1).join(''), success: false });
+        res.send({
+          field: "health",
+          message: health.LNDStatus.message
+            .split("UNKNOWN: ")
+            .slice(1)
+            .join(""),
+          success: false
+        });
         return false;
       }
     } catch (err) {
@@ -201,9 +237,9 @@ module.exports = (
   });
 
   let recreateLnServices = async (callback, cs) => {
-    if (cs) {
-      cs();
-    }
+    // if (cs) {
+    //   cs();
+    // }
 
     let lnServices = await require("../services/lnd/lightning")(
       lnServicesData.lndProto,
@@ -214,65 +250,54 @@ module.exports = (
     lightning = lnServices.lightning;
     walletUnlocker = lnServices.walletUnlocker;
 
-    if (callback) {
-      setTimeout(() => {
-        callback();
-      }, 3000);
-    }
+    // if (callback) {
+    //   setTimeout(() => {
+    //     callback();
+    //   }, 3000);
+    // }
     return true;
   };
 
   app.post("/api/lnd/connect", (req, res) => {
-    let args = {
+    const args = {
       wallet_password: Buffer.from(req.body.password, "utf-8")
     };
 
-    lightning.getInfo({}, function(err, response) {
+    lightning.getInfo({}, async function(err, response) {
       if (err) {
         // try to unlock wallet
-        recreateLnServices(
-          () => {
-            walletUnlocker.unlockWallet(args, function(
-              unlockErr,
-              unlockResponse
-            ) {
-              if (unlockErr) {
-                console.log("unlock Error:", unlockErr);
-                logger.debug("unlock Error:", unlockErr);
-                unlockErr.error = unlockErr.message;
-                console.log("unlockErr.message", unlockErr.message);
-                return checkHealth().then(health => {
-                  if (health.LNDStatus.success) {
-                    let errorMessage = unlockErr.details;
-                    res.status(400);
-                    res.send({ errorMessage: unlockErr.message });
-                  } else {
-                    res.status(500);
-                    res.send({ errorMessage: "LND is down" });
-                  }
-                });
-              } else {
-                recreateLnServices(
-                  () => {
-                    mySocketsEvents.emit("updateLightning");
-                    return auth.generateToken().then(token => {
-                      res.json({
-                        authorization: token
-                      });
-                    });
-                  },
-                  () => console.log("second")
-                );
-              }
+        await recreateLnServices();
+        walletUnlocker.unlockWallet(args, async function(
+          unlockErr,
+          unlockResponse
+        ) {
+          if (unlockErr) {
+            console.log("unlock Error:", unlockErr);
+            logger.debug("unlock Error:", unlockErr);
+            unlockErr.error = unlockErr.message;
+            console.log("unlockErr.message", unlockErr.message);
+            const health = await checkHealth();
+            if (health.LNDStatus.success) {
+              res.status(400);
+              res.send({ field: "WalletUnlocker", message: unlockErr.message });
+            } else {
+              res.status(500);
+              res.send({ errorMessage: "LND is down" });
+            }
+          } else {
+            await recreateLnServices();
+            mySocketsEvents.emit("updateLightning");
+            const token = await auth.generateToken();
+            res.json({
+              authorization: token
             });
-          },
-          () => console.log("first")
-        );
+          }
+        });
       } else {
-        return auth.generateToken().then(token => {
-          res.json({
-            authorization: token
-          });
+        const token = await auth.generateToken();
+
+        return res.json({
+          authorization: token
         });
       }
     });
@@ -372,9 +397,9 @@ module.exports = (
                 if (!fs.existsSync(lnServicesData.macaroonPath)) {
                   return waitUntilFileExists(seconds + 1);
                 }
-  
+
                 logger.debug("admin.macaroon file created");
-  
+
                 mySocketsEvents.emit("updateLightning");
                 const lnServices = await require("../services/lnd/lightning")(
                   lnServicesData.lndProto,
@@ -393,7 +418,7 @@ module.exports = (
                     publicKey
                   }
                 });
-              } catch(err) {
+              } catch (err) {
                 res.status(400).json({
                   field: "unknown",
                   message: err.message
@@ -821,7 +846,7 @@ module.exports = (
         logger.debug("ChannelBalance:", response);
         res.json(response);
       }
-    }); 
+    });
   });
 
   // openchannel
