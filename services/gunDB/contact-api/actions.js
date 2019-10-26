@@ -203,8 +203,6 @@ const acceptRequest = async (
     from: senderPublicKey
   } = await new Promise((res, rej) => {
     requestNode.once(hr => {
-
-      
       if (!isHandshakeRequest(hr)) {
         rej(new Error(ErrorCode.TRIED_TO_ACCEPT_AN_INVALID_REQUEST));
         return;

@@ -15,6 +15,7 @@ mySEA.encrypt = (msg, secret) => {
   if (typeof msg !== 'string') {
     return SEAx.encrypt(msg, secret)
   }
+  
   return SEAx.encrypt(msg, secret).then(encMsg => {
     return '$$__SHOCKWALLET__' + encMsg
   })
@@ -23,9 +24,10 @@ mySEA.encrypt = (msg, secret) => {
 mySEA.decrypt = (encMsg, secret) => {
   if (typeof encMsg !== 'string') {
     return SEAx.decrypt(encMsg, secret)
-  } else {
-    return SEAx.decrypt(encMsg.slice('$$__SHOCKWALLET__'.length), secret)
   }
+  
+  return SEAx.decrypt(encMsg.slice('$$__SHOCKWALLET__'.length), secret)
+  
 }
 
 mySEA.secret = (recipientOrSenderEpub, recipientOrSenderSEA) => {
@@ -63,7 +65,7 @@ const Event = require("../event-constants");
 
 /** @type {GUNNode} */
 // @ts-ignore
-const gun = Gun({
+const gun = new Gun({
   file: Config.DATA_FILE_NAME,
   peers: Config.PEERS
 });
@@ -154,7 +156,7 @@ class Mediator {
       // refresh received requests
       API.Events.onSimplerReceivedRequests(
         debounce(
-          once(async receivedRequests => {
+          once(receivedRequests => {
             this.socket.emit(Event.ON_RECEIVED_REQUESTS, {
               msg: receivedRequests,
               ok: true,
@@ -167,10 +169,10 @@ class Mediator {
         user,
         mySEA
       );
-    } catch (e) { console.log(e);
+    } catch (err) { console.log(err);
       this.socket.emit(Action.ACCEPT_REQUEST, {
         ok: false,
-        msg: e.message,
+        msg: err.message,
         origBody: body
       });
     }
@@ -192,10 +194,10 @@ class Mediator {
         msg: null,
         origBody: body
       });
-    } catch (e) { console.log(e);
+    } catch (err) { console.log(err);
       this.socket.emit(Action.BLACKLIST, {
         ok: false,
-        msg: e.message,
+        msg: err.message,
         origBody: body
       });
     }
@@ -221,10 +223,10 @@ class Mediator {
         msg: null,
         origBody: body
       });
-    } catch (e) { console.log(e);
+    } catch (err) { console.log(err);
       this.socket.emit(Action.GENERATE_NEW_HANDSHAKE_NODE, {
         ok: false,
-        msg: e.message,
+        msg: err.message,
         origBody: body
       });
     }
@@ -252,10 +254,10 @@ class Mediator {
         msg: null,
         origBody: body
       });
-    } catch (e) { console.log(e);
+    } catch (err) { console.log(err);
       this.socket.emit(Action.SEMD_HANDSHAKE_REQUEST, {
         ok: false,
-        msg: e.message,
+        msg: err.message,
         origBody: body
       });
     }
@@ -284,10 +286,10 @@ class Mediator {
         msg: null,
         origBody: body
       });
-    } catch (e) { console.log(e);
+    } catch (err) { console.log(err);
       this.socket.emit(Action.SEND_HANDSHAKE_REQUEST_WITH_INITIAL_MSG, {
         ok: false,
-        msg: e.message,
+        msg: err.message,
         origBody: body
       });
     }
@@ -309,10 +311,10 @@ class Mediator {
         msg: null,
         origBody: reqBody
       });
-    } catch (e) { console.log(e);
+    } catch (err) { console.log(err);
       this.socket.emit(Action.SEND_MESSAGE, {
         ok: false,
-        msg: e.message,
+        msg: err.message,
         origBody: reqBody
       });
     }
@@ -334,10 +336,10 @@ class Mediator {
         msg: null,
         origBody: body
       });
-    } catch (e) { console.log(e);
+    } catch (err) { console.log(err);
       this.socket.emit(Action.SET_AVATAR, {
         ok: false,
-        msg: e.message,
+        msg: err.message,
         origBody: body
       });
     }
@@ -359,10 +361,10 @@ class Mediator {
         msg: null,
         origBody: body
       });
-    } catch (e) { console.log(e);
+    } catch (err) { console.log(err);
       this.socket.emit(Action.SET_DISPLAY_NAME, {
         ok: false,
-        msg: e.message,
+        msg: err.message,
         origBody: body
       });
     }
@@ -386,10 +388,10 @@ class Mediator {
           origBody: body
         });
       }, user);
-    } catch (e) { console.log(e);
+    } catch (err) { console.log(err);
       this.socket.emit(Event.ON_AVATAR, {
         ok: false,
-        msg: e.message,
+        msg: err.message,
         origBody: body
       });
     }
@@ -411,10 +413,10 @@ class Mediator {
           origBody: body
         });
       }, user);
-    } catch (e) { console.log(e);
+    } catch (err) { console.log(err);
       this.socket.emit(Event.ON_BLACKLIST, {
         ok: false,
-        msg: e.message,
+        msg: err.message,
         origBody: body
       });
     }
@@ -441,10 +443,10 @@ class Mediator {
         user,
         mySEA
       );
-    } catch (e) { console.log(e);
+    } catch (err) { console.log(err);
       this.socket.emit(Event.ON_CHATS, {
         ok: false,
-        msg: e.message,
+        msg: err.message,
         origBody: body
       });
     }
@@ -466,10 +468,10 @@ class Mediator {
           origBody: body
         });
       }, user);
-    } catch (e) { console.log(e);
+    } catch (err) { console.log(err);
       this.socket.emit(Event.ON_DISPLAY_NAME, {
         ok: false,
-        msg: e.message,
+        msg: err.message,
         origBody: body
       });
     }
@@ -491,10 +493,10 @@ class Mediator {
           origBody: body
         });
       }, user);
-    } catch (e) { console.log(e);
+    } catch (err) { console.log(err);
       this.socket.emit(Event.ON_HANDSHAKE_ADDRESS, {
         ok: false,
-        msg: e.message,
+        msg: err.message,
         origBody: body
       });
     }
@@ -521,9 +523,9 @@ class Mediator {
         user,
         mySEA
       );
-    } catch (e) { console.log(e);
+    } catch (err) { console.log(err);
       this.socket.emit(Event.ON_RECEIVED_REQUESTS, {
-        msg: e.message,
+        msg: err.message,
         ok: false,
         origBody: body
       });
@@ -551,9 +553,9 @@ class Mediator {
         user,
         mySEA
       );
-    } catch (e) { console.log(e);
+    } catch (err) { console.log(err);
       this.socket.emit(Event.ON_SENT_REQUESTS, {
-        msg: e.message,
+        msg: err.message,
         ok: false,
         origBody: body
       });
@@ -564,7 +566,7 @@ class Mediator {
 let _isAuthenticating = false;
 let _isRegistering = false;
 
-const isAuthenticated = () => !!user.is;
+const isAuthenticated = () => typeof user.is === 'object' && user.is !== null;
 const isAuthenticating = () => _isAuthenticating;
 const isRegistering = () => _isRegistering;
 
