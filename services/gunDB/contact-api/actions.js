@@ -652,6 +652,7 @@ const sendHandshakeRequest = async (
 
   // This needs to come before the write to sent requests. Because that write
   // triggers Jobs.onAcceptedRequests and it in turn reads from request-to-user
+  // This also triggers Events.onSimplerSentRequests
   await new Promise((res, rej) => {
     user
       .get(Key.REQUEST_TO_USER)

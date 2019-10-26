@@ -537,36 +537,6 @@ const onOutgoing = async (
 };
 
 /**
- * @param {(sentRequests: Record<string, HandshakeRequest>) => void} cb
- * @param {UserGUNNode} user Pass only for testing purposes.
- * @returns {void}
- */
-const onSentRequests = (cb, user) => {
-  if (!user.is) {
-    throw new Error(ErrorCode.NOT_AUTH);
-  }
-
-  /**
-   * @type {Record<string, HandshakeRequest>}
-   */
-  const sentRequests = {};
-
-  user
-    .get(Key.SENT_REQUESTS)
-    .map()
-    .on((req, reqKey) => {
-      if (!Schema.isHandshakeRequest(req)) {
-        console.error("non-handshakerequest received");
-        return;
-      }
-
-      sentRequests[reqKey] = req;
-
-      cb(sentRequests);
-    });
-};
-
-/**
  * Massages all of the more primitive data structures into a more manageable
  * 'Chat' paradigm.
  * @param {(chats: Chat[]) => void} cb
@@ -1115,7 +1085,6 @@ module.exports = {
   onDisplayName,
   onIncomingMessages,
   onOutgoing,
-  onSentRequests,
   onChats,
   onSimplerReceivedRequests,
   onSimplerSentRequests

@@ -11,141 +11,190 @@
  * on the same
  */
 const ErrorCode = require("./errorCode");
-const Events = require("./events");
 const Key = require("./key");
+const Schema = require("./schema");
 
 /**
  * @typedef {import('./SimpleGUN').GUNNode} GUNNode
  * @typedef {import('./SimpleGUN').ISEA} ISEA
- * @typedef {import('./schema').HandshakeRequest} HandshakeRequest
  * @typedef {import('./SimpleGUN').UserGUNNode} UserGUNNode
  */
 
 /**
- * @typedef {(sentRequests: Record<string, HandshakeRequest>) => void} OnSentRequest
+ * @param {string} reqID
+ * @param {UserGUNNode} user
+ * @param {ISEA} SEA
+ * @param {string} mySecret
+ * @returns {Promise<string>}
  */
+const reqToRecipientPub = async (reqID, user, SEA, mySecret) => {
+  const reqToUser = user.get(Key.REQUEST_TO_USER);
+
+  const maybeEncryptedForMeRecipientPub = await reqToUser.get(reqID).then();
+
+  if (typeof maybeEncryptedForMeRecipientPub !== "string") {
+    throw new TypeError("typeof maybeEncryptedForMeRecipientPub !== 'string'");
+  }
+
+  if (maybeEncryptedForMeRecipientPub.length < 10) {
+    throw new TypeError("maybeEncryptedForMeRecipientPub.length < 10");
+  }
+
+  const encryptedForMeRecipientPub = maybeEncryptedForMeRecipientPub;
+
+  const recipientPub = await SEA.decrypt(encryptedForMeRecipientPub, mySecret);
+
+  if (typeof recipientPub !== "string") {
+    throw new TypeError("typeof recipientPub !== 'string'");
+  }
+
+  if (recipientPub.length < 30) {
+    throw new TypeError("recipientPub.length < 30");
+  }
+
+  return recipientPub;
+};
 
 /**
- * @param {((osr: OnSentRequest, user: UserGUNNode) => void)=} onSentRequestsFactory
- * Pass only for testing purposes.
+ * @param {string} pub
+ * @param {GUNNode} gun
+ * @returns {Promise<string>}
+ */
+const pubToEpub = (pub, gun) =>
+  new Promise((res, rej) => {
+    gun
+      .user(pub)
+      .get("epub")
+      .once(epub => {
+        if (typeof epub !== "string") {
+          rej(
+            new TypeError(
+              "Expected gun.user(pub).get(epub) to be an string. Instead got: " +
+                typeof epub
+            )
+          );
+        } else {
+          if (epub.length === 0) {
+            rej(
+              new TypeError(
+                "Expected gun.user(pub).get(epub) to be a populated string."
+              )
+            );
+          }
+
+          res(epub);
+        }
+      });
+  });
+
+/**
+ * @param {string} recipientPub
+ * @param {UserGUNNode} user
+ * @returns {Promise<string>}
+ */
+const recipientPubToLastReqSentID = async (recipientPub, user) => {
+  const userToLastReqSent = user.get(Key.USER_TO_LAST_REQUEST_SENT);
+
+  const lastReqSentID = await userToLastReqSent.get(recipientPub).then();
+
+  if (typeof lastReqSentID !== "string") {
+    throw new TypeError("typeof latestReqSentID !== 'string'");
+  }
+
+  if (lastReqSentID.length < 5) {
+    throw new TypeError("latestReqSentID.length < 5");
+  }
+
+  return lastReqSentID;
+};
+
+/**
+ * @param {string} recipientPub
+ * @param {UserGUNNode} user
+ * @returns {Promise<boolean>}
+ */
+const successfulHandshakeAlreadyExists = async (recipientPub, user) => {
+  const userToIncoming = user.get(Key.USER_TO_INCOMING);
+
+  const maybeIncomingID = await userToIncoming.get(recipientPub).then();
+
+  if (typeof maybeIncomingID === "string") {
+    if (maybeIncomingID.length < 5) {
+      throw new TypeError("maybeIncomingID.length < 5");
+    }
+
+    return true;
+  }
+
+  return false;
+};
+
+/**
  * @throws {Error} NOT_AUTH
  * @param {GUNNode} gun
- * @param {UserGUNNode} user Pass only for testing purposes.
+ * @param {UserGUNNode} user
  * @param {ISEA} SEA
  * @returns {Promise<void>}
  */
-exports.onAcceptedRequests = async (
-  onSentRequestsFactory = Events.onSentRequests,
-  gun,
-  user,
-  SEA
-) => {
+const onAcceptedRequests = async (gun, user, SEA) => {
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
 
-  // Used only for decrypting request-to-user-map
   const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+
   if (typeof mySecret !== "string") {
-    throw new TypeError("typeof mySecret !== 'string'");
+    console.log("Jobs.onAcceptedRequests() -> typeof mySecret !== 'string'");
+    return;
   }
 
-  onSentRequestsFactory(async sentRequests => {
-    for (const [reqKey, req] of Object.entries(sentRequests)) {
+  user
+    .get(Key.SENT_REQUESTS)
+    .map()
+    .on(async (sentReq, reqID) => {
       try {
-        /** @type {string|undefined} */
-        const encryptedForMeRecipientPub = await new Promise((res, rej) => {
-          user
-            .get(Key.REQUEST_TO_USER)
-            .get(reqKey)
-            .once(userPub => {
-              if (typeof userPub === "undefined") {
-                res(undefined);
-                return;
-              }
-
-              if (typeof userPub !== "string") {
-                rej(
-                  new TypeError(
-                    "typeof userPub !== 'string' && typeof userPub !== 'undefined'"
-                  )
-                );
-                return;
-              }
-
-              if (userPub.length === 0) {
-                rej(new TypeError("userPub.length === 0"));
-                return;
-              }
-
-              res(userPub);
-            });
-        });
-
-        if (typeof encryptedForMeRecipientPub === "undefined") {
-          console.log(
-            "onAcceptedRequests() -> typeof encryptedForMeRecipientPub === 'undefined'"
+        if (!Schema.isHandshakeRequest(sentReq)) {
+          throw new TypeError(
+            `non handshake received: ${JSON.stringify(sentReq)}`
           );
-          return;
         }
 
-        const recipientPub = await SEA.decrypt(
-          encryptedForMeRecipientPub,
+        const recipientPub = await reqToRecipientPub(
+          reqID,
+          user,
+          SEA,
           mySecret
         );
 
-        if (typeof recipientPub !== "string") {
-          console.log(
-            "onAcceptedRequests() -> typeof recipientPub !== 'string'"
-          );
-          return;
+        const latestReqSentID = await recipientPubToLastReqSentID(
+          recipientPub,
+          user
+        );
+
+        const isStaleRequest = latestReqSentID !== reqID;
+
+        const recipientEpub = await pubToEpub(recipientPub, gun);
+        const ourSecret = await SEA.secret(recipientEpub, user._.sea);
+
+        if (typeof ourSecret !== "string") {
+          throw new TypeError("typeof ourSecret !== 'string'");
         }
-
-        /** @type {string} */
-        const recipientEpub = await new Promise((res, rej) => {
-          gun
-            .user(recipientPub)
-            .get("epub")
-            .once(epub => {
-              if (typeof epub !== "string") {
-                rej(
-                  new TypeError(
-                    "Expected gun.user(pub).get(epub) to be an string. Instead got: " +
-                      typeof epub
-                  )
-                );
-              } else {
-                if (epub.length === 0) {
-                  rej(
-                    new TypeError(
-                      "Expected gun.user(pub).get(epub) to be a populated string."
-                    )
-                  );
-                }
-
-                res(epub);
-              }
-            });
-        });
 
         // The response can be decrypted with the same secret regardless of who
         // wrote to it last (see HandshakeRequest definition).
-        const ourSecret = await SEA.secret(recipientEpub, user._.sea);
-        if (typeof ourSecret !== "string") {
-          console.log("onAcceptedRequests() -> typeof ourSecret !== 'string'");
-          return;
-        }
-
         // This could be our feed ID for the recipient, or the recipient's feed
         // id if he accepted the request.
-        const feedID = await SEA.decrypt(req.response, ourSecret);
+        const feedID = await SEA.decrypt(sentReq.response, ourSecret);
+
         if (typeof feedID !== "string") {
-          console.log("onAcceptedRequests() -> typeof feedID !== 'string'");
-          return;
+          throw new TypeError("typeof feedID !== 'string'");
         }
 
-        // Check that this feed exists on the recipient's outgoing feeds
-        const wasAccepted = await new Promise(res => {
+        if (feedID.length < 6) {
+          throw new TypeError("feedID.length < 6");
+        }
+
+        const feedIDExistsOnRecipientsOutgoings = await new Promise(res => {
           gun
             .user(recipientPub)
             .get(Key.OUTGOINGS)
@@ -155,22 +204,17 @@ exports.onAcceptedRequests = async (
             });
         });
 
-        if (!wasAccepted) {
+        ////////////////////////////////////////////////////////////////////////
+
+        if (await successfulHandshakeAlreadyExists(recipientPub, user)) {
           return;
         }
 
-        const alreadyExists = await new Promise(res => {
-          user
-            .get(Key.USER_TO_INCOMING)
-            .get(recipientPub)
-            .once(feedIDRecord => {
-              res(typeof feedIDRecord !== "undefined");
-            });
-        });
+        if (isStaleRequest) {
+          return;
+        }
 
-        // only set it once. Also prevents attacks if an attacker
-        // modifies old requests
-        if (alreadyExists) {
+        if (!feedIDExistsOnRecipientsOutgoings) {
           return;
         }
 
@@ -180,10 +224,12 @@ exports.onAcceptedRequests = async (
           .get(Key.USER_TO_INCOMING)
           .get(recipientPub)
           .put(encryptedForMeIncomingID);
-      } catch (e) {
-        console.error(`Error inside Jobs.onAcceptedRequests: ${e.message}`);
-        console.log(e);
+      } catch (err) {
+        console.warn(`Jobs.onAcceptedRequests() -> ${err.message}`);
       }
-    }
-  }, user);
+    });
+};
+
+module.exports = {
+  onAcceptedRequests
 };
