@@ -165,7 +165,6 @@ module.exports = (
    * health check
    */
   app.get("/health", async (req, res) => {
-    console.log(lightning);
     const health = await checkHealth();
     res.send(health);
   });
@@ -183,7 +182,7 @@ module.exports = (
   });
 
   app.post("/api/mobile/error", (req, res) => {
-    console.log(JSON.stringify(req.body));
+    logger.debug("Mobile error:", JSON.stringify(req.body));
     res.json({ msg: OK });
   });
 
@@ -272,10 +271,8 @@ module.exports = (
           unlockResponse
         ) {
           if (unlockErr) {
-            console.log("unlock Error:", unlockErr);
-            logger.debug("unlock Error:", unlockErr);
             unlockErr.error = unlockErr.message;
-            console.log("unlockErr.message", unlockErr.message);
+            logger.error("Unlock Error:", unlockErr);
             const health = await checkHealth();
             if (health.LNDStatus.success) {
               res.status(400);
@@ -365,11 +362,10 @@ module.exports = (
         walletArgs,
         async (initWalletErr, initWalletResponse) => {
           if (initWalletErr) {
-            console.log("initWallet Error:", initWalletErr.message);
+            logger.error("initWallet Error:", initWalletErr.message);
             const healthResponse = await checkHealth();
             if (healthResponse.LNDStatus.success) {
               const errorMessage = initWalletErr.details;
-              logger.debug("initWallet Error:", errorMessage);
 
               return res.status(400).json({
                 field: "initWallet",
@@ -435,11 +431,10 @@ module.exports = (
 
   // get lnd info
   app.get("/api/lnd/getinfo", (req, res) => {
-    console.log(lightning.estimateFee);
+    Logger.debug("Estimated Fee:", lightning.estimateFee);
     lightning.getInfo({}, function(err, response) {
       if (err) {
-        console.log("GetInfo Error:", err);
-        logger.debug("GetInfo Error:", err);
+        logger.error("GetInfo Error:", err);
         return checkHealth().then(health => {
           if (health.LNDStatus.success) {
             err.error = err.message;
@@ -450,8 +445,7 @@ module.exports = (
           }
         });
       } else {
-        console.log("GetInfo:", response);
-        logger.debug("GetInfo:", response);
+        logger.info("GetInfo:", response);
         if (!response.uris || response.uris.length === 0) {
           if (config.lndAddress) {
             response.uris = [
@@ -866,11 +860,9 @@ module.exports = (
         local_funding_amount: 500000,
         push_sat: 50000
       };
-      console.log("OpenChannelRequest", openChannelRequest);
       logger.debug("OpenChannelRequest", openChannelRequest);
       lightning.openChannelSync(openChannelRequest, function(err, response) {
         if (err) {
-          console.log("OpenChannelRequest Error:", err);
           logger.debug("OpenChannelRequest Error:", err);
           return checkHealth().then(health => {
             if (health.LNDStatus.success) {
@@ -882,7 +874,6 @@ module.exports = (
             }
           });
         } else {
-          console.log("OpenChannelRequest:", response);
           channel_point = response;
           logger.debug("OpenChannelRequest:", response);
           res.json(response);
@@ -912,11 +903,10 @@ module.exports = (
         },
         force: true
       };
-      console.log("CloseChannelRequest", closeChannelRequest);
       logger.debug("CloseChannelRequest", closeChannelRequest);
       lightning.closeChannel(closeChannelRequest, function(err, response) {
         if (err) {
-          console.log("CloseChannelRequest Error:", err);
+          logger.error("CloseChannelRequest Error:", err);
           return checkHealth().then(health => {
             if (health.LNDStatus.success) {
               logger.debug("CloseChannelRequest Error:", err);
@@ -928,7 +918,6 @@ module.exports = (
             }
           });
         } else {
-          console.log("CloseChannelRequest:", response);
           logger.debug("CloseChannelRequest:", response);
           res.json(response);
         }
