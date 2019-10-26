@@ -28,7 +28,7 @@
 /**
  *
  * @param {any} item
- * @returns {o is ChatMessage}
+ * @returns {item is ChatMessage}
  */
 exports.isChatMessage = item => {
   if (typeof item !== "object") {
@@ -73,7 +73,7 @@ exports.isChatMessage = item => {
 
 /**
  * @param {any} item
- * @returns {o is Chat}
+ * @returns {item is Chat}
  */
 exports.isChat = item => {
   if (typeof item !== "object") {
@@ -130,7 +130,7 @@ exports.isChat = item => {
 
 /**
  * @param {any} item
- * @returns {o is SimpleSentRequest}
+ * @returns {item is SimpleSentRequest}
  */
 exports.isSimpleSentRequest = item => {
   if (typeof item !== "object") {
@@ -185,7 +185,7 @@ exports.isSimpleSentRequest = item => {
 
 /**
  * @param {any} item
- * @returns {o is SimpleReceivedRequest}
+ * @returns {item is SimpleReceivedRequest}
  */
 exports.isSimpleReceivedRequest = item => {
   if (typeof item !== "object") {
@@ -230,7 +230,7 @@ exports.isSimpleReceivedRequest = item => {
 
 /**
  * @param {any} item
- * @returns {o is HandshakeRequest}
+ * @returns {item is HandshakeRequest}
  */
 exports.isHandshakeRequest = item => {
   if (typeof item !== "object") {
@@ -260,7 +260,7 @@ exports.isHandshakeRequest = item => {
 
 /**
  * @param {any} item
- * @returns {o is Message}
+ * @returns {item is Message}
  */
 exports.isMessage = item => {
   if (typeof item !== "object") {
@@ -278,7 +278,7 @@ exports.isMessage = item => {
 
 /**
  * @param {any} item
- * @returns {o is PartialOutgoing}
+ * @returns {item is PartialOutgoing}
  */
 exports.isPartialOutgoing = item => {
   if (typeof item !== "object") {
@@ -297,7 +297,7 @@ exports.isPartialOutgoing = item => {
 /**
  *
  * @param {any} item
- * @returns {o is Outgoing}
+ * @returns {item is Outgoing}
  */
 exports.isOutgoing = item => {
   if (typeof item !== "object") {
