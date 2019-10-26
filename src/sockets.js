@@ -64,7 +64,6 @@ module.exports = function(
     lightning = lnServices.lightning;
 
     mySocketsEvents.addListener("updateLightning", async () => {
-      console.log("mySocketsEvents.on(updateLightning");
 
       let lnServices;
       if (fs.existsSync(lnServicesData.macaroonPath)) {
