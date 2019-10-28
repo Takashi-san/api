@@ -541,7 +541,7 @@ class Mediator {
 
       await throwOnInvalidToken(token);
 
-      API.Events.onSimplerSentRequests(
+      await API.Events.onSimplerSentRequests(
         sentRequests => {
           this.socket.emit(Event.ON_SENT_REQUESTS, {
             msg: sentRequests,
