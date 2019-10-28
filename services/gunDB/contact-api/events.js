@@ -1,11 +1,14 @@
 /**
  * @prettier
  */
+const debounce = require("lodash/debounce");
+
 const Actions = require("./actions");
 const ErrorCode = require("./errorCode");
 const Key = require("./key");
 const Schema = require("./schema");
 const uniqBy = require("lodash/uniqBy");
+const Utils = require("./utils");
 /**
  * @typedef {import('./SimpleGUN').UserGUNNode} UserGUNNode
  * @typedef {import('./SimpleGUN').GUNNode} GUNNode
@@ -874,13 +877,33 @@ const onSimplerReceivedRequests = (cb, gun, user, SEA) => {
  * @param {GUNNode} gun
  * @param {UserGUNNode} user
  * @param {ISEA} SEA
- * @returns {void}
+ * @returns {Promise<void>}
  */
-const onSimplerSentRequests = (cb, gun, user, SEA) => {
+const onSimplerSentRequests = async (cb, gun, user, SEA) => {
   /**
-   * @type {Record<string, Omit<SimpleSentRequest, 'timestamp'> & { timestamp?: undefined|number}>}
-   **/
-  const idToPartialSimpleSentRequest = {};
+   * @type {Record<string, HandshakeRequest>}
+   */
+  const sentRequests = {};
+
+  /**
+   * @type {Partial<Record<string, string|null>>}
+   */
+  const recipientToAvatar = {};
+
+  /**
+   * @type {Partial<Record<string, string|null>>}
+   */
+  const recipientToDisplayName = {};
+
+  /**
+   * @type {Partial<Record<string, string|null>>}
+   */
+  const recipientToCurrentHandshakeAddress = {};
+
+  /**
+   * @type {Record<string, SimpleSentRequest>}
+   */
+  const simpleSentRequests = {};
 
   /**
    * Keep track of recipients that already have listeners for their avatars.
@@ -902,150 +925,167 @@ const onSimplerSentRequests = (cb, gun, user, SEA) => {
    */
   const recipientsWithCurrentHandshakeNodeListener = [];
 
-  /**
-   * @type {Set<string>}
-   */
-  const recipientsThatHaveAcceptedRequest = new Set();
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
 
-  const callCB = () => {
-    // CAST: If the timestamp is a number then we already know the simple sent
-    // request is complete
-    const sentRequests = /** @type {SimpleSentRequest[]} */ (Object.values(
-      idToPartialSimpleSentRequest
-    )
-      .filter(sr => typeof sr.timestamp === "number")
-      .filter(
-        sr => !recipientsThatHaveAcceptedRequest.has(sr.recipientPublicKey)
-      ));
+  if (typeof mySecret !== "string") {
+    throw new TypeError("typeof mySecret !== 'string'");
+  }
 
-    // from newest to oldest
-    sentRequests.sort((reqA, reqB) => reqB.timestamp - reqA.timestamp);
+  const callCB = debounce(async () => {
+    try {
+      const entries = Object.entries(sentRequests);
 
-    // since it is reverse sorted, uniqBy will keep the LATEST  sent request for
-    // a given recipient
-    const withoutDups = uniqBy(sentRequests, sr => sr.recipientPublicKey);
+      /** @type {Promise<null|SimpleSentRequest>[]} */
+      const promises = entries.map(([sentReqID, sentReq]) =>
+        (async () => {
+          const recipientPub = await Utils.reqToRecipientPub(
+            sentReqID,
+            user,
+            SEA,
+            mySecret
+          );
 
-    // sort them from oldest to newest
-    withoutDups.sort((reqA, reqB) => reqA.timestamp - reqB.timestamp);
+          const latestReqIDForRecipient = await Utils.recipientPubToLastReqSentID(
+            recipientPub,
+            user
+          );
 
-    cb(withoutDups);
-  };
+          if (
+            await Utils.reqWasAccepted(
+              sentReq.response,
+              recipientPub,
+              gun,
+              user,
+              SEA
+            )
+          ) {
+            return null;
+          }
+
+          if (
+            !recipientsWithCurrentHandshakeNodeListener.includes(recipientPub)
+          ) {
+            recipientsWithCurrentHandshakeNodeListener.push(recipientPub);
+
+            gun
+              .user(recipientPub)
+              .get(Key.CURRENT_HANDSHAKE_NODE)
+              .on(chn => {
+                if (typeof chn !== "object") {
+                  console.log(
+                    "onSimplerSentRequests() -> typeof chn !== 'object'"
+                  );
+
+                  return;
+                }
+
+                recipientToCurrentHandshakeAddress[recipientPub] =
+                  chn === null ? null : chn._["#"];
+
+                callCB();
+              });
+          }
+
+          if (!recipientsWithAvatarListener.includes(recipientPub)) {
+            recipientsWithAvatarListener.push(recipientPub);
+
+            gun
+              .user(recipientPub)
+              .get(Key.PROFILE)
+              .get(Key.AVATAR)
+              .on(avatar => {
+                if (typeof avatar === "string" || avatar === null) {
+                  recipientToAvatar[recipientPub] = avatar;
+                  callCB();
+                }
+              });
+          }
+
+          if (!recipientsWithDisplayNameListener.includes(recipientPub)) {
+            recipientsWithDisplayNameListener.push(recipientPub);
+
+            gun
+              .user(recipientPub)
+              .get(Key.PROFILE)
+              .get(Key.DISPLAY_NAME)
+              .on(displayName => {
+                if (typeof displayName === "string" || displayName === null) {
+                  recipientToDisplayName[recipientPub] = displayName;
+                  callCB();
+                }
+              });
+          }
+
+          const isStaleRequest = latestReqIDForRecipient !== sentReqID;
+
+          if (isStaleRequest) {
+            return null;
+          }
+
+          const maybeReqOnCurrHN = await gun
+            .user(recipientPub)
+            .get(Key.CURRENT_HANDSHAKE_NODE)
+            .get(sentReqID)
+            .then();
+
+          const recipientChangedRequestAddress =
+            typeof maybeReqOnCurrHN !== "object" || maybeReqOnCurrHN === null;
+
+          /**
+           * @type {SimpleSentRequest}
+           */
+          const res = {
+            id: sentReqID,
+            recipientAvatar: recipientToAvatar[recipientPub] || null,
+            recipientChangedRequestAddress,
+            recipientDisplayName: recipientToDisplayName[recipientPub] || null,
+            recipientPublicKey: recipientPub,
+            timestamp: sentReq.timestamp
+          };
+
+          return res;
+        })()
+      );
+
+      const reqsOrNulls = await Promise.all(promises);
+
+      /** @type {SimpleSentRequest[]} */
+      // @ts-ignore
+      const reqs = reqsOrNulls.filter(item => item !== null);
+
+      for (const req of reqs) {
+        simpleSentRequests[req.id] = req;
+      }
+    } catch (err) {
+      console.log(`onSimplerSentRequests() -> callCB() -> ${err.message}`);
+    } finally {
+      cb(Object.values(simpleSentRequests));
+    }
+  }, 500);
 
   callCB();
 
+  // force a refresh when a request is accepted
+  user.get(Key.USER_TO_INCOMING).on(() => {
+    callCB();
+  });
+
   user
-    .get(Key.USER_TO_INCOMING)
+    .get(Key.SENT_REQUESTS)
     .map()
-    .on((_, userPK) => {
-      if (!user.is) {
-        console.warn("!user.is");
-        return;
+    .on((sentRequest, sentRequestID) => {
+      try {
+        if (!Schema.isHandshakeRequest(sentRequest)) {
+          throw new TypeError("!Schema.isHandshakeRequest(sentRequest)");
+        }
+
+        sentRequests[sentRequestID] = sentRequest;
+      } catch (err) {
+        console.log(
+          `onSimplerSentRequests() -> sentRequestID: ${sentRequestID} -> ${err.message}`
+        );
       }
-
-      recipientsThatHaveAcceptedRequest.add(userPK);
-
-      callCB();
     });
-
-  __onSentRequestToUser(
-    srtu => {
-      for (const [sentRequestID, recipientPK] of Object.entries(srtu)) {
-        if (!idToPartialSimpleSentRequest[sentRequestID]) {
-          idToPartialSimpleSentRequest[sentRequestID] = {
-            id: sentRequestID,
-            recipientAvatar: "",
-            recipientChangedRequestAddress: false,
-            recipientDisplayName: "",
-            recipientPublicKey: recipientPK
-          };
-        }
-
-        if (!recipientsWithAvatarListener.includes(recipientPK)) {
-          recipientsWithAvatarListener.push(recipientPK);
-
-          gun
-            .user(recipientPK)
-            .get(Key.PROFILE)
-            .get(Key.AVATAR)
-            .on(avatar => {
-              if (typeof avatar === "string") {
-                idToPartialSimpleSentRequest[
-                  sentRequestID
-                ].recipientAvatar = avatar;
-
-                callCB();
-              }
-            });
-        }
-
-        if (!recipientsWithDisplayNameListener.includes(recipientPK)) {
-          recipientsWithDisplayNameListener.push(recipientPK);
-
-          gun
-            .user(recipientPK)
-            .get(Key.PROFILE)
-            .get(Key.DISPLAY_NAME)
-            .on(displayName => {
-              if (typeof displayName === "string") {
-                idToPartialSimpleSentRequest[
-                  sentRequestID
-                ].recipientDisplayName = displayName;
-
-                callCB();
-              }
-            });
-        }
-
-        if (!recipientsWithCurrentHandshakeNodeListener.includes(recipientPK)) {
-          recipientsWithCurrentHandshakeNodeListener.push(recipientPK);
-
-          gun
-            .user(recipientPK)
-            .get(Key.CURRENT_HANDSHAKE_NODE)
-            .on(() => {
-              gun
-                .user(recipientPK)
-                .get(Key.CURRENT_HANDSHAKE_NODE)
-                .get(sentRequestID)
-                .once(data => {
-                  if (typeof data === "undefined") {
-                    idToPartialSimpleSentRequest[
-                      sentRequestID
-                    ].recipientChangedRequestAddress = true;
-
-                    callCB();
-                  }
-                });
-            });
-        }
-
-        if (
-          typeof idToPartialSimpleSentRequest[sentRequestID].timestamp ===
-          "undefined"
-        ) {
-          user
-            .get(Key.SENT_REQUESTS)
-            .get(sentRequestID)
-            .once(sr => {
-              if (Schema.isHandshakeRequest(sr)) {
-                idToPartialSimpleSentRequest[sentRequestID].timestamp =
-                  sr.timestamp;
-
-                callCB();
-              } else {
-                console.warn("non handshake request received");
-                console.warn(sr);
-                console.warn("/non handshake request received");
-              }
-            });
-        }
-      }
-
-      callCB();
-    },
-    user,
-    SEA
-  );
 };
 
 module.exports = {
