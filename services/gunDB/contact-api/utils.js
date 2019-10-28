@@ -14,32 +14,30 @@ const Key = require("./key");
  * @param {GUNNode} gun
  * @returns {Promise<string>}
  */
-const pubToEpub = (pub, gun) =>
-  new Promise((res, rej) => {
-    gun
+const pubToEpub = async (pub, gun) => {
+  try {
+    const epub = await gun
       .user(pub)
       .get("epub")
-      .once(epub => {
-        if (typeof epub !== "string") {
-          rej(
-            new TypeError(
-              "Expected gun.user(pub).get(epub) to be an string. Instead got: " +
-                typeof epub
-            )
-          );
-        } else {
-          if (epub.length === 0) {
-            rej(
-              new TypeError(
-                "Expected gun.user(pub).get(epub) to be a populated string."
-              )
-            );
-          }
+      .then();
 
-          res(epub);
-        }
-      });
-  });
+    if (typeof epub !== "string") {
+      throw new TypeError(
+        `Expected gun.user(pub).get(epub) to be an string. Instead got: ${typeof epub}`
+      );
+    }
+
+    if (epub.length === 0) {
+      throw new TypeError(
+        "Expected gun.user(pub).get(epub) to be a populated string."
+      );
+    }
+
+    return epub;
+  } catch (err) {
+    throw new Error(`pubToEpub() -> ${err.message}`);
+  }
+};
 
 /**
  * @param {string} reqID
