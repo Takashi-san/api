@@ -116,9 +116,103 @@ const successfulHandshakeAlreadyExists = async (recipientPub, user) => {
   return false;
 };
 
+/**
+ * @param {string} recipientPub
+ * @param {UserGUNNode} user
+ * @param {ISEA} SEA
+ * @returns {Promise<string|null>}
+ */
+const recipientToOutgoingID = async (recipientPub, user, SEA) => {
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+
+  if (typeof mySecret !== "string") {
+    throw new TypeError("could not get mySecret");
+  }
+
+  const maybeEncryptedOutgoingID = await user
+    .get(Key.RECIPIENT_TO_OUTGOING)
+    .get(recipientPub)
+    .then();
+
+  if (typeof maybeEncryptedOutgoingID === "string") {
+    const outgoingID = await SEA.decrypt(maybeEncryptedOutgoingID, mySecret);
+
+    return outgoingID || null;
+  }
+
+  return null;
+};
+
+/**
+ * @param {string} reqResponse
+ * @param {string} recipientPub
+ * @param {GUNNode} gun
+ * @param {UserGUNNode} user
+ * @param {ISEA} SEA
+ * @returns {Promise<boolean>}
+ */
+const reqWasAccepted = async (reqResponse, recipientPub, gun, user, SEA) => {
+  try {
+    const recipientEpub = await pubToEpub(recipientPub, gun);
+    const ourSecret = await SEA.secret(recipientEpub, user._.sea);
+    if (typeof ourSecret !== "string") {
+      throw new TypeError('typeof ourSecret !== "string"');
+    }
+
+    const decryptedResponse = await SEA.decrypt(reqResponse, ourSecret);
+
+    if (typeof decryptedResponse !== "string") {
+      throw new TypeError('typeof decryptedResponse !== "string"');
+    }
+
+    const myFeedID = await recipientToOutgoingID(recipientPub, user, SEA);
+
+    if (typeof myFeedID === "string" && decryptedResponse === myFeedID) {
+      return false;
+    }
+
+    const recipientFeedID = decryptedResponse;
+
+    const maybeFeed = await gun
+      .user(recipientPub)
+      .get(Key.OUTGOINGS)
+      .get(recipientFeedID)
+      .then();
+
+    const feedExistsOnRecipient =
+      typeof maybeFeed === "object" && maybeFeed !== null;
+
+    return feedExistsOnRecipient;
+  } catch (err) {
+    throw new Error(`reqWasAccepted() -> ${err.message}`);
+  }
+};
+
+/**
+ *
+ * @param {string} userPub
+ * @param {GUNNode} gun
+ * @returns {Promise<string|null>}
+ */
+const currHandshakeAddress = async (userPub, gun) => {
+  const maybeHN = await gun
+    .user(userPub)
+    .get(Key.CURRENT_HANDSHAKE_NODE)
+    .then();
+
+  if (typeof maybeHN === "object" && maybeHN !== null) {
+    return maybeHN._["#"];
+  }
+
+  return null;
+};
+
 module.exports = {
   pubToEpub,
   reqToRecipientPub,
   recipientPubToLastReqSentID,
-  successfulHandshakeAlreadyExists
+  successfulHandshakeAlreadyExists,
+  recipientToOutgoingID,
+  reqWasAccepted,
+  currHandshakeAddress
 };
