@@ -643,10 +643,6 @@ const onChats = (cb, gun, user, SEA) => {
           };
         }
 
-        console.log(
-          `recipientPK: ${recipientPK} -- incomingFeedID: ${incomingFeedID}`
-        );
-
         const chat = recipientPKToChat[recipientPK];
 
         if (!usersWithIncomingListeners.includes(recipientPK)) {
@@ -654,9 +650,6 @@ const onChats = (cb, gun, user, SEA) => {
 
           onIncomingMessages(
             msgs => {
-              console.log(
-                `msgs for recipientPK: ${recipientPK}: ${Object.values(msgs)}`
-              );
               for (const [msgK, msg] of Object.entries(msgs)) {
                 const { messages } = chat;
 
@@ -806,18 +799,6 @@ const onSimplerReceivedRequests = (cb, gun, user, SEA) => {
           });
       });
 
-      console.log("------------------------------");
-      console.log(`requestorEpub: ${requestorEpub}`);
-      console.log("------------------------------");
-
-      console.log("------------------------------");
-      console.log(`req: ${JSON.stringify(req)}`);
-      console.log("------------------------------");
-
-      console.log("------------------------------");
-      console.log(`user._.sea: ${JSON.stringify(user._.sea)}`);
-      console.log("------------------------------");
-
       const ourSecret = await SEA.secret(requestorEpub, user._.sea);
       if (typeof ourSecret !== "string") {
         console.log(
@@ -832,14 +813,6 @@ const onSimplerReceivedRequests = (cb, gun, user, SEA) => {
         );
         return;
       }
-
-      console.log("------------------------------");
-      console.log(`encryptedResponse: ${req.response}`);
-      console.log("------------------------------");
-
-      console.log("------------------------------");
-      console.log(`decryptedResponse: ${decryptedResponse}`);
-      console.log("------------------------------");
 
       if (!idToReceivedRequest[reqID]) {
         idToReceivedRequest[reqID] = {
