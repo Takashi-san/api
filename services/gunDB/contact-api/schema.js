@@ -27,19 +27,19 @@
 
 /**
  *
- * @param {any} o
- * @returns {o is ChatMessage}
+ * @param {any} item
+ * @returns {item is ChatMessage}
  */
-exports.isChatMessage = o => {
-  if (typeof o !== "object") {
+exports.isChatMessage = item => {
+  if (typeof item !== "object") {
     return false;
   }
 
-  if (o === null) {
+  if (item === null) {
     return false;
   }
 
-  const obj = /** @type {ChatMessage} */ (o);
+  const obj = /** @type {ChatMessage} */ (item);
 
   if (typeof obj.body !== "string") {
     return false;
@@ -72,19 +72,19 @@ exports.isChatMessage = o => {
  */
 
 /**
- * @param {any} o
- * @returns {o is Chat}
+ * @param {any} item
+ * @returns {item is Chat}
  */
-exports.isChat = o => {
-  if (typeof o !== "object") {
+exports.isChat = item => {
+  if (typeof item !== "object") {
     return false;
   }
 
-  if (o === null) {
+  if (item === null) {
     return false;
   }
 
-  const obj = /** @type {Chat} */ (o);
+  const obj = /** @type {Chat} */ (item);
 
   if (typeof obj.recipientAvatar !== "string" && obj.recipientAvatar !== null) {
     return false;
@@ -102,7 +102,7 @@ exports.isChat = o => {
     return false;
   }
 
-  return obj.messages.every(item => exports.isChatMessage(item));
+  return obj.messages.every(msg => exports.isChatMessage(msg));
 };
 
 /**
@@ -129,19 +129,19 @@ exports.isChat = o => {
  */
 
 /**
- * @param {any} o
- * @returns {o is SimpleSentRequest}
+ * @param {any} item
+ * @returns {item is SimpleSentRequest}
  */
-exports.isSimpleSentRequest = o => {
-  if (typeof o !== "object") {
+exports.isSimpleSentRequest = item => {
+  if (typeof item !== "object") {
     return false;
   }
 
-  if (o === null) {
+  if (item === null) {
     return false;
   }
 
-  const obj = /** @type {SimpleSentRequest} */ (o);
+  const obj = /** @type {SimpleSentRequest} */ (item);
 
   if (typeof obj.id !== "string") {
     return false;
@@ -184,19 +184,19 @@ exports.isSimpleSentRequest = o => {
  */
 
 /**
- * @param {any} o
- * @returns {o is SimpleReceivedRequest}
+ * @param {any} item
+ * @returns {item is SimpleReceivedRequest}
  */
-exports.isSimpleReceivedRequest = o => {
-  if (typeof o !== "object") {
+exports.isSimpleReceivedRequest = item => {
+  if (typeof item !== "object") {
     return false;
   }
 
-  if (o === null) {
+  if (item === null) {
     return false;
   }
 
-  const obj = /** @type {SimpleReceivedRequest} */ (o);
+  const obj = /** @type {SimpleReceivedRequest} */ (item);
 
   if (typeof obj.id !== "string") {
     return false;
@@ -229,19 +229,19 @@ exports.isSimpleReceivedRequest = o => {
 };
 
 /**
- * @param {any} o
- * @returns {o is HandshakeRequest}
+ * @param {any} item
+ * @returns {item is HandshakeRequest}
  */
-exports.isHandshakeRequest = o => {
-  if (typeof o !== "object") {
+exports.isHandshakeRequest = item => {
+  if (typeof item !== "object") {
     return false;
   }
 
-  if (o === null) {
+  if (item === null) {
     return false;
   }
 
-  const obj = /** @type {HandshakeRequest} */ (o);
+  const obj = /** @type {HandshakeRequest} */ (item);
 
   if (typeof obj.from !== "string") {
     return false;
@@ -259,59 +259,59 @@ exports.isHandshakeRequest = o => {
 };
 
 /**
- * @param {any} o
- * @returns {o is Message}
+ * @param {any} item
+ * @returns {item is Message}
  */
-exports.isMessage = o => {
-  if (typeof o !== "object") {
+exports.isMessage = item => {
+  if (typeof item !== "object") {
     return false;
   }
 
-  if (o === null) {
+  if (item === null) {
     return false;
   }
 
-  const obj = /** @type {Message} */ (o);
+  const obj = /** @type {Message} */ (item);
 
   return typeof obj.body === "string" && typeof obj.timestamp === "number";
 };
 
 /**
- * @param {any} o
- * @returns {o is PartialOutgoing}
+ * @param {any} item
+ * @returns {item is PartialOutgoing}
  */
-exports.isPartialOutgoing = o => {
-  if (typeof o !== "object") {
+exports.isPartialOutgoing = item => {
+  if (typeof item !== "object") {
     return false;
   }
 
-  if (o === null) {
+  if (item === null) {
     return false;
   }
 
-  const obj = /** @type {PartialOutgoing} */ (o);
+  const obj = /** @type {PartialOutgoing} */ (item);
 
   return typeof obj.with === "string";
 };
 
 /**
  *
- * @param {any} o
- * @returns {o is Outgoing}
+ * @param {any} item
+ * @returns {item is Outgoing}
  */
-exports.isOutgoing = o => {
-  if (typeof o !== "object") {
+exports.isOutgoing = item => {
+  if (typeof item !== "object") {
     return false;
   }
 
-  if (o === null) {
+  if (item === null) {
     return false;
   }
 
-  const obj = /** @type {Outgoing} */ (o);
+  const obj = /** @type {Outgoing} */ (item);
 
-  const messagesAreMessages = Object.values(obj.messages).every(item =>
-    exports.isMessage(item)
+  const messagesAreMessages = Object.values(obj.messages).every(msg =>
+    exports.isMessage(msg)
   );
 
   return typeof obj.with === "string" && messagesAreMessages;

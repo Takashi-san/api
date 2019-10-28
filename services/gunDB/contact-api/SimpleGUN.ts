@@ -13,12 +13,12 @@ export interface Ack {
   err: string | undefined;
 }
 
-type ListenerSoul = {
+type ListenerObjSoul = {
   "#": string;
 };
 
-export type ListenerObj = Record<string, ListenerSoul | Primitive | null> & {
-  _: ListenerSoul;
+export type ListenerObj = Record<string, ListenerObjSoul | Primitive | null> & {
+  _: ListenerObjSoul;
 };
 
 export type ListenerData = Primitive | null | ListenerObj | undefined;
@@ -27,8 +27,7 @@ export type Listener = (data: ListenerData, key: string) => void;
 export type Callback = (ack: Ack) => void;
 
 export interface Soul {
-  '#': string;
-  get: string | undefined;
+  get: string;
   put: Primitive | null | object | undefined;
 }
 
@@ -36,13 +35,16 @@ export interface GUNNode {
   _: Soul;
   get(key: string): GUNNode;
   map(): GUNNode;
-  put(data: ValidDataValue | GUNNode, cb?: Callback): void;
+  put(data: ValidDataValue | GUNNode, cb?: Callback): GUNNode;
   on(this: GUNNode, cb: Listener): void;
   once(this: GUNNode, cb?: Listener): GUNNode;
   set(data: ValidDataValue | GUNNode, cb?: Callback): GUNNode;
   off(): void;
   user(): UserGUNNode;
   user(epub: string): GUNNode;
+
+  then(): Promise<ListenerData>;
+  then<T>(cb: (v: ListenerData) => T): Promise<ListenerData>;
 }
 
 export interface CreateAck {
@@ -86,9 +88,12 @@ export interface UserGUNNode extends GUNNode {
 
 export interface ISEA {
   encrypt(message: string, senderSecret: string): Promise<string>;
-  decrypt(encryptedMessage: string, recipientSecret: string): Promise<string>;
+  decrypt(
+    encryptedMessage: string,
+    recipientSecret: string
+  ): Promise<string | undefined>;
   secret(
     recipientOrSenderEpub: string,
     recipientOrSenderUserPair: UserPair
-  ): Promise<string>;
+  ): Promise<string | undefined>;
 }

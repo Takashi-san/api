@@ -1,11 +1,14 @@
 /**
  * @prettier
  */
+const debounce = require("lodash/debounce");
+
 const Actions = require("./actions");
 const ErrorCode = require("./errorCode");
 const Key = require("./key");
 const Schema = require("./schema");
 const uniqBy = require("lodash/uniqBy");
+const Utils = require("./utils");
 /**
  * @typedef {import('./SimpleGUN').UserGUNNode} UserGUNNode
  * @typedef {import('./SimpleGUN').GUNNode} GUNNode
@@ -35,6 +38,10 @@ const __onOutgoingMessage = async (outgoingKey, cb, gun, user, SEA) => {
   }
 
   const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+  if (typeof mySecret !== "string") {
+    throw new TypeError("typeof mySecret !== 'string'");
+  }
+
   const outgoing = user.get(Key.OUTGOINGS).get(outgoingKey);
 
   /** @type {string} */
@@ -42,14 +49,10 @@ const __onOutgoingMessage = async (outgoingKey, cb, gun, user, SEA) => {
     outgoing.get("with").once(erpk => {
       if (typeof erpk !== "string") {
         rej(new TypeError("Expected outgoing.get('with') to be an string."));
+      } else if (erpk.length === 0) {
+        rej(new TypeError("Expected outgoing.get('with') to be a populated."));
       } else {
-        if (erpk.length === 0) {
-          rej(
-            new TypeError("Expected outgoing.get('with') to be a populated.")
-          );
-        } else {
-          res(erpk);
-        }
+        res(erpk);
       }
     });
   });
@@ -58,6 +61,12 @@ const __onOutgoingMessage = async (outgoingKey, cb, gun, user, SEA) => {
     encryptedForMeRecipientPublicKey,
     mySecret
   );
+
+  if (typeof recipientPublicKey !== "string") {
+    throw new TypeError(
+      "__onOutgoingMessage() -> typeof recipientPublicKey !== 'string'"
+    );
+  }
 
   /** @type {string} */
   const recipientEpub = await new Promise((res, rej) => {
@@ -82,6 +91,12 @@ const __onOutgoingMessage = async (outgoingKey, cb, gun, user, SEA) => {
 
   const ourSecret = await SEA.secret(recipientEpub, user._.sea);
 
+  if (typeof ourSecret !== "string") {
+    throw new TypeError(
+      "__onOutgoingMessage() -> typeof ourSecret !== 'string'"
+    );
+  }
+
   outgoing
     .get(Key.MESSAGES)
     .map()
@@ -91,15 +106,21 @@ const __onOutgoingMessage = async (outgoingKey, cb, gun, user, SEA) => {
         return;
       }
 
-      const encryptedBody = msg.body;
-      const decryptedBody =
-        encryptedBody === Actions.INITIAL_MSG
-          ? encryptedBody
-          : await SEA.decrypt(encryptedBody, ourSecret);
+      let { body } = msg;
+
+      if (body !== Actions.INITIAL_MSG) {
+        const decrypted = await SEA.decrypt(body, ourSecret);
+
+        if (typeof decrypted !== "string") {
+          console.log("__onOutgoingMessage() -> typeof decrypted !== 'string'");
+        } else {
+          body = decrypted;
+        }
+      }
 
       cb(
         {
-          body: decryptedBody,
+          body,
           timestamp: msg.timestamp
         },
         key
@@ -118,11 +139,19 @@ const __onSentRequestToUser = async (cb, user, SEA) => {
   /** @type {Record<string, string>} */
   const requestToUser = {};
 
+  cb(requestToUser);
+
   if (!user.is) {
     throw new Error(ErrorCode.NOT_AUTH);
   }
 
   const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+
+  if (typeof mySecret !== "string") {
+    throw new TypeError(
+      "__onSentRequestToUser() -> typeof mySecret !== 'string'"
+    );
+  }
 
   user
     .get(Key.REQUEST_TO_USER)
@@ -139,6 +168,11 @@ const __onSentRequestToUser = async (cb, user, SEA) => {
       }
 
       const userPub = await SEA.decrypt(encryptedUserPub, mySecret);
+
+      if (typeof userPub !== "string") {
+        console.log(`__onSentRequestToUser() -> typeof userPub !== 'string'`);
+        return;
+      }
 
       requestToUser[requestID] = userPub;
 
@@ -161,6 +195,10 @@ const __onUserToIncoming = async (cb, user, SEA) => {
   const userToOutgoing = {};
 
   const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+
+  if (typeof mySecret !== "string") {
+    throw new TypeError("__onUserToIncoming() -> typeof mySecret !== 'string'");
+  }
 
   user
     .get(Key.USER_TO_INCOMING)
@@ -203,9 +241,8 @@ const onAvatar = (cb, user) => {
   // Initial value if avvatar is undefined in gun
   cb(null);
 
-  const u = /** @type {UserGUNNode} */ (user);
-
-  u.get(Key.PROFILE)
+  user
+    .get(Key.PROFILE)
     .get(Key.AVATAR)
     .on(avatar => {
       if (typeof avatar === "string" || avatar === null) {
@@ -315,12 +352,11 @@ const onDisplayName = (cb, user) => {
     throw new Error(ErrorCode.NOT_AUTH);
   }
 
-  const u = /** @type {UserGUNNode} */ (user);
-
   // Initial value if display name is undefined in gun
   cb(null);
 
-  u.get(Key.PROFILE)
+  user
+    .get(Key.PROFILE)
     .get(Key.DISPLAY_NAME)
     .on(displayName => {
       if (typeof displayName === "string" || displayName === null) {
@@ -352,6 +388,8 @@ const onIncomingMessages = (cb, userPK, incomingFeedID, gun, user, SEA) => {
    */
   const messages = {};
 
+  cb(messages);
+
   otherUser
     .get(Key.OUTGOINGS)
     .get(incomingFeedID)
@@ -362,10 +400,6 @@ const onIncomingMessages = (cb, userPK, incomingFeedID, gun, user, SEA) => {
         console.warn("non-message received");
         return;
       }
-
-      const msg = data;
-
-      const encryptedBody = msg.body;
 
       /** @type {string} */
       const recipientEpub = await new Promise((res, rej) => {
@@ -392,12 +426,27 @@ const onIncomingMessages = (cb, userPK, incomingFeedID, gun, user, SEA) => {
 
       const secret = await SEA.secret(recipientEpub, user._.sea);
 
+      if (typeof secret !== "string") {
+        console.log("onIncomingMessages() -> typeof secret !== 'string'");
+        return;
+      }
+
+      let { body } = data;
+
+      if (body !== Actions.INITIAL_MSG) {
+        const decrypted = await SEA.decrypt(body, secret);
+
+        if (typeof decrypted !== "string") {
+          console.log("onIncommingMessages() -> typeof decrypted !== 'string'");
+          return;
+        }
+
+        body = decrypted;
+      }
+
       messages[key] = {
-        body:
-          encryptedBody === Actions.INITIAL_MSG
-            ? Actions.INITIAL_MSG
-            : await SEA.decrypt(encryptedBody, secret),
-        timestamp: msg.timestamp
+        body,
+        timestamp: data.timestamp
       };
 
       cb(messages);
@@ -424,20 +473,24 @@ const onOutgoing = async (
   }
 
   const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+  if (typeof mySecret !== "string") {
+    throw new TypeError("onOutgoing() -> typeof mySecret !== 'string'");
+  }
 
   /**
    * @type {Record<string, Outgoing>}
    */
   const outgoings = {};
 
+  cb(outgoings);
+
   /**
    * @type {string[]}
    */
   const outgoingsWithMessageListeners = [];
 
-  const u = /** @type {UserGUNNode} */ (user);
-
-  u.get(Key.OUTGOINGS)
+  user
+    .get(Key.OUTGOINGS)
     .map()
     .on(async (data, key) => {
       if (!Schema.isPartialOutgoing(data)) {
@@ -450,6 +503,13 @@ const onOutgoing = async (
         data.with,
         mySecret
       );
+
+      if (typeof decryptedRecipientPublicKey !== "string") {
+        console.log(
+          "onOutgoing() -> typeof decryptedRecipientPublicKey !== 'string'"
+        );
+        return;
+      }
 
       outgoings[key] = {
         messages: outgoings[key] ? outgoings[key].messages : {},
@@ -476,37 +536,6 @@ const onOutgoing = async (
       }
 
       cb(outgoings);
-    });
-};
-
-/**
- * @param {(sentRequests: Record<string, HandshakeRequest>) => void} cb
- * @param {UserGUNNode} user Pass only for testing purposes.
- * @returns {void}
- */
-const onSentRequests = (cb, user) => {
-  if (!user.is) {
-    throw new Error(ErrorCode.NOT_AUTH);
-  }
-
-  /**
-   * @type {Record<string, HandshakeRequest>}
-   */
-  const sentRequests = {};
-
-  const u = /** @type {UserGUNNode} */ (user);
-
-  u.get(Key.SENT_REQUESTS)
-    .map()
-    .on((req, reqKey) => {
-      if (!Schema.isHandshakeRequest(req)) {
-        console.error("non-handshakerequest received");
-        return;
-      }
-
-      sentRequests[reqKey] = req;
-
-      cb(sentRequests);
     });
 };
 
@@ -562,7 +591,7 @@ const onChats = (cb, gun, user, SEA) => {
     chats.forEach(chat => {
       chat.messages = chat.messages
         .slice(0)
-        .sort((a, b) => a.timestamp - b.timestamp);
+        .sort((msgA, msgB) => msgA.timestamp - msgB.timestamp);
     });
 
     cb(chats);
@@ -584,10 +613,10 @@ const onChats = (cb, gun, user, SEA) => {
           };
         }
 
-        const messages = recipientPKToChat[recipientPK].messages;
+        const { messages } = recipientPKToChat[recipientPK];
 
         for (const [msgK, msg] of Object.entries(outgoing.messages)) {
-          if (!messages.find(m => m.id === msgK)) {
+          if (!messages.find(_msg => _msg.id === msgK)) {
             messages.push({
               body: msg.body,
               id: msgK,
@@ -617,10 +646,6 @@ const onChats = (cb, gun, user, SEA) => {
           };
         }
 
-        console.log(
-          `recipientPK: ${recipientPK} -- incomingFeedID: ${incomingFeedID}`
-        );
-
         const chat = recipientPKToChat[recipientPK];
 
         if (!usersWithIncomingListeners.includes(recipientPK)) {
@@ -628,13 +653,10 @@ const onChats = (cb, gun, user, SEA) => {
 
           onIncomingMessages(
             msgs => {
-              console.log(
-                `msgs for recipientPK: ${recipientPK}: ${Object.values(msgs)}`
-              );
               for (const [msgK, msg] of Object.entries(msgs)) {
-                const messages = chat.messages;
+                const { messages } = chat;
 
-                if (!messages.find(m => m.id === msgK)) {
+                if (!messages.find(_msg => _msg.id === msgK)) {
                   messages.push({
                     body: msg.body,
                     id: msgK,
@@ -718,7 +740,7 @@ const onSimplerReceivedRequests = (cb, gun, user, SEA) => {
   user
     .get(Key.USER_TO_INCOMING)
     .map()
-    .on(async (_, userPK) => {
+    .on((_, userPK) => {
       if (!user.is) {
         console.warn("!user.is");
         return;
@@ -731,13 +753,15 @@ const onSimplerReceivedRequests = (cb, gun, user, SEA) => {
     const pendingReceivedRequests = Object.values(idToReceivedRequest);
 
     // sort from newest to oldest
-    pendingReceivedRequests.sort((a, b) => b.timestamp - a.timestamp);
+    pendingReceivedRequests.sort(
+      (reqA, reqB) => reqB.timestamp - reqA.timestamp
+    );
 
     // in case the requestor mistakenly sent a dupe request, remove the oldest
     // one
     const withoutDups = uniqBy(pendingReceivedRequests, rr => rr.requestorPK);
     // sort again from oldest to newest
-    withoutDups.sort((a, b) => a.timestamp - b.timestamp);
+    withoutDups.sort((reqA, reqB) => reqA.timestamp - reqB.timestamp);
 
     cb(
       // remove already accepted requestors
@@ -756,7 +780,7 @@ const onSimplerReceivedRequests = (cb, gun, user, SEA) => {
         return;
       }
 
-      const requestorEpub = await new Promise((res, rej) =>
+      const requestorEpub = await new Promise((res, rej) => {
         gun
           .user(req.from)
           .get("epub")
@@ -775,31 +799,23 @@ const onSimplerReceivedRequests = (cb, gun, user, SEA) => {
               }
               res(epub);
             }
-          })
-      );
-
-      console.log("------------------------------");
-      console.log(`requestorEpub: ${requestorEpub}`);
-      console.log("------------------------------");
-
-      console.log("------------------------------");
-      console.log(`req: ${JSON.stringify(req)}`);
-      console.log("------------------------------");
-
-      console.log("------------------------------");
-      console.log(`user._.sea: ${JSON.stringify(user._.sea)}`);
-      console.log("------------------------------");
+          });
+      });
 
       const ourSecret = await SEA.secret(requestorEpub, user._.sea);
+      if (typeof ourSecret !== "string") {
+        console.log(
+          "onSimplerReceivedRequests() -> typeof ourSecret !== 'string'"
+        );
+        return;
+      }
       const decryptedResponse = await SEA.decrypt(req.response, ourSecret);
-
-      console.log("------------------------------");
-      console.log(`encryptedResponse: ${req.response}`);
-      console.log("------------------------------");
-
-      console.log("------------------------------");
-      console.log(`decryptedResponse: ${decryptedResponse}`);
-      console.log("------------------------------");
+      if (typeof decryptedResponse !== "string") {
+        console.log(
+          "onSimplerReceivedRequests() -> typeof decryptedResponse !== 'string'"
+        );
+        return;
+      }
 
       if (!idToReceivedRequest[reqID]) {
         idToReceivedRequest[reqID] = {
@@ -861,13 +877,33 @@ const onSimplerReceivedRequests = (cb, gun, user, SEA) => {
  * @param {GUNNode} gun
  * @param {UserGUNNode} user
  * @param {ISEA} SEA
- * @returns {void}
+ * @returns {Promise<void>}
  */
-const onSimplerSentRequests = (cb, gun, user, SEA) => {
+const onSimplerSentRequests = async (cb, gun, user, SEA) => {
   /**
-   * @type {Record<string, Omit<SimpleSentRequest, 'timestamp'> & { timestamp?: undefined|number}>}
-   **/
-  const idToPartialSimpleSentRequest = {};
+   * @type {Record<string, HandshakeRequest>}
+   */
+  const sentRequests = {};
+
+  /**
+   * @type {Partial<Record<string, string|null>>}
+   */
+  const recipientToAvatar = {};
+
+  /**
+   * @type {Partial<Record<string, string|null>>}
+   */
+  const recipientToDisplayName = {};
+
+  /**
+   * @type {Partial<Record<string, string|null>>}
+   */
+  const recipientToCurrentHandshakeAddress = {};
+
+  /**
+   * @type {Record<string, SimpleSentRequest>}
+   */
+  const simpleSentRequests = {};
 
   /**
    * Keep track of recipients that already have listeners for their avatars.
@@ -889,148 +925,167 @@ const onSimplerSentRequests = (cb, gun, user, SEA) => {
    */
   const recipientsWithCurrentHandshakeNodeListener = [];
 
-  /**
-   * @type {Set<string>}
-   */
-  const recipientsThatHaveAcceptedRequest = new Set();
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
 
-  const callCB = () => {
-    // CAST: If the timestamp is a number then we already know the simple sent
-    // request is complete
-    const sentRequests = /** @type {SimpleSentRequest[]} */ (Object.values(
-      idToPartialSimpleSentRequest
-    )
-      .filter(sr => typeof sr.timestamp === "number")
-      .filter(
-        sr => !recipientsThatHaveAcceptedRequest.has(sr.recipientPublicKey)
-      ));
+  if (typeof mySecret !== "string") {
+    throw new TypeError("typeof mySecret !== 'string'");
+  }
 
-    // from newest to oldest
-    sentRequests.sort((a, b) => b.timestamp - a.timestamp);
+  const callCB = debounce(async () => {
+    try {
+      const entries = Object.entries(sentRequests);
 
-    // since it is reverse sorted, uniqBy will keep the LATEST  sent request for
-    // a given recipient
-    const withoutDups = uniqBy(sentRequests, sr => sr.recipientPublicKey);
+      /** @type {Promise<null|SimpleSentRequest>[]} */
+      const promises = entries.map(([sentReqID, sentReq]) =>
+        (async () => {
+          const recipientPub = await Utils.reqToRecipientPub(
+            sentReqID,
+            user,
+            SEA,
+            mySecret
+          );
 
-    // sort them from oldest to newest
-    withoutDups.sort((a, b) => a.timestamp - b.timestamp);
+          const latestReqIDForRecipient = await Utils.recipientPubToLastReqSentID(
+            recipientPub,
+            user
+          );
 
-    cb(withoutDups);
-  };
+          if (
+            await Utils.reqWasAccepted(
+              sentReq.response,
+              recipientPub,
+              gun,
+              user,
+              SEA
+            )
+          ) {
+            return null;
+          }
+
+          if (
+            !recipientsWithCurrentHandshakeNodeListener.includes(recipientPub)
+          ) {
+            recipientsWithCurrentHandshakeNodeListener.push(recipientPub);
+
+            gun
+              .user(recipientPub)
+              .get(Key.CURRENT_HANDSHAKE_NODE)
+              .on(chn => {
+                if (typeof chn !== "object") {
+                  console.log(
+                    "onSimplerSentRequests() -> typeof chn !== 'object'"
+                  );
+
+                  return;
+                }
+
+                recipientToCurrentHandshakeAddress[recipientPub] =
+                  chn === null ? null : chn._["#"];
+
+                callCB();
+              });
+          }
+
+          if (!recipientsWithAvatarListener.includes(recipientPub)) {
+            recipientsWithAvatarListener.push(recipientPub);
+
+            gun
+              .user(recipientPub)
+              .get(Key.PROFILE)
+              .get(Key.AVATAR)
+              .on(avatar => {
+                if (typeof avatar === "string" || avatar === null) {
+                  recipientToAvatar[recipientPub] = avatar;
+                  callCB();
+                }
+              });
+          }
+
+          if (!recipientsWithDisplayNameListener.includes(recipientPub)) {
+            recipientsWithDisplayNameListener.push(recipientPub);
+
+            gun
+              .user(recipientPub)
+              .get(Key.PROFILE)
+              .get(Key.DISPLAY_NAME)
+              .on(displayName => {
+                if (typeof displayName === "string" || displayName === null) {
+                  recipientToDisplayName[recipientPub] = displayName;
+                  callCB();
+                }
+              });
+          }
+
+          const isStaleRequest = latestReqIDForRecipient !== sentReqID;
+
+          if (isStaleRequest) {
+            return null;
+          }
+
+          const maybeReqOnCurrHN = await gun
+            .user(recipientPub)
+            .get(Key.CURRENT_HANDSHAKE_NODE)
+            .get(sentReqID)
+            .then();
+
+          const recipientChangedRequestAddress =
+            typeof maybeReqOnCurrHN !== "object" || maybeReqOnCurrHN === null;
+
+          /**
+           * @type {SimpleSentRequest}
+           */
+          const res = {
+            id: sentReqID,
+            recipientAvatar: recipientToAvatar[recipientPub] || null,
+            recipientChangedRequestAddress,
+            recipientDisplayName: recipientToDisplayName[recipientPub] || null,
+            recipientPublicKey: recipientPub,
+            timestamp: sentReq.timestamp
+          };
+
+          return res;
+        })()
+      );
+
+      const reqsOrNulls = await Promise.all(promises);
+
+      /** @type {SimpleSentRequest[]} */
+      // @ts-ignore
+      const reqs = reqsOrNulls.filter(item => item !== null);
+
+      for (const req of reqs) {
+        simpleSentRequests[req.id] = req;
+      }
+    } catch (err) {
+      console.log(`onSimplerSentRequests() -> callCB() -> ${err.message}`);
+    } finally {
+      cb(Object.values(simpleSentRequests));
+    }
+  }, 500);
 
   callCB();
 
+  // force a refresh when a request is accepted
+  user.get(Key.USER_TO_INCOMING).on(() => {
+    callCB();
+  });
+
   user
-    .get(Key.USER_TO_INCOMING)
+    .get(Key.SENT_REQUESTS)
     .map()
-    .on(async (_, userPK) => {
-      if (!user.is) {
-        console.warn("!user.is");
-        return;
+    .on((sentRequest, sentRequestID) => {
+      try {
+        if (!Schema.isHandshakeRequest(sentRequest)) {
+          throw new TypeError("!Schema.isHandshakeRequest(sentRequest)");
+        }
+
+        sentRequests[sentRequestID] = sentRequest;
+      } catch (err) {
+        console.log(
+          `onSimplerSentRequests() -> sentRequestID: ${sentRequestID} -> ${err.message}`
+        );
       }
-
-      recipientsThatHaveAcceptedRequest.add(userPK);
-
-      callCB();
     });
-
-  __onSentRequestToUser(
-    srtu => {
-      for (const [sentRequestID, recipientPK] of Object.entries(srtu)) {
-        if (!idToPartialSimpleSentRequest[sentRequestID]) {
-          idToPartialSimpleSentRequest[sentRequestID] = {
-            id: sentRequestID,
-            recipientAvatar: "",
-            recipientChangedRequestAddress: false,
-            recipientDisplayName: "",
-            recipientPublicKey: recipientPK
-          };
-        }
-
-        if (!recipientsWithAvatarListener.includes(recipientPK)) {
-          recipientsWithAvatarListener.push(recipientPK);
-
-          gun
-            .user(recipientPK)
-            .get(Key.PROFILE)
-            .get(Key.AVATAR)
-            .on(avatar => {
-              if (typeof avatar === "string") {
-                idToPartialSimpleSentRequest[
-                  sentRequestID
-                ].recipientAvatar = avatar;
-
-                callCB();
-              }
-            });
-        }
-
-        if (!recipientsWithDisplayNameListener.includes(recipientPK)) {
-          recipientsWithDisplayNameListener.push(recipientPK);
-
-          gun
-            .user(recipientPK)
-            .get(Key.PROFILE)
-            .get(Key.DISPLAY_NAME)
-            .on(displayName => {
-              if (typeof displayName === "string") {
-                idToPartialSimpleSentRequest[
-                  sentRequestID
-                ].recipientDisplayName = displayName;
-
-                callCB();
-              }
-            });
-        }
-
-        if (!recipientsWithCurrentHandshakeNodeListener.includes(recipientPK)) {
-          recipientsWithCurrentHandshakeNodeListener.push(recipientPK);
-
-          gun
-            .user(recipientPK)
-            .get(Key.CURRENT_HANDSHAKE_NODE)
-            .on(() => {
-              gun
-                .user(recipientPK)
-                .get(Key.CURRENT_HANDSHAKE_NODE)
-                .get(sentRequestID)
-                .once(data => {
-                  if (typeof data === "undefined") {
-                    idToPartialSimpleSentRequest[
-                      sentRequestID
-                    ].recipientChangedRequestAddress = true;
-
-                    callCB();
-                  }
-                });
-            });
-        }
-
-        if (
-          typeof idToPartialSimpleSentRequest[sentRequestID].timestamp ===
-          "undefined"
-        ) {
-          user
-            .get(Key.SENT_REQUESTS)
-            .get(sentRequestID)
-            .once(sr => {
-              if (Schema.isHandshakeRequest(sr)) {
-                idToPartialSimpleSentRequest[sentRequestID].timestamp =
-                  sr.timestamp;
-
-                callCB();
-              } else {
-                console.warn("non handshake request received");
-              }
-            });
-        }
-      }
-
-      callCB();
-    },
-    user,
-    SEA
-  );
 };
 
 module.exports = {
@@ -1043,7 +1098,6 @@ module.exports = {
   onDisplayName,
   onIncomingMessages,
   onOutgoing,
-  onSentRequests,
   onChats,
   onSimplerReceivedRequests,
   onSimplerSentRequests
