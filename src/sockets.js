@@ -23,12 +23,12 @@ module.exports = function(
 
   const mySocketsEvents = new MySocketsEvents();
 
-  var clients = [];
+  let clients = [];
 
-  var authEnabled = (login && pass) || (limitlogin && limitpass);
+  let authEnabled = (login && pass) || (limitlogin && limitpass);
 
-  var userToken = null;
-  var limitUserToken = null;
+  let userToken = null;
+  let limitUserToken = null;
   if (login && pass) {
     userToken = new Buffer(login + ":" + pass).toString("base64");
   }
@@ -37,6 +37,31 @@ module.exports = function(
       "base64"
     );
   }
+
+  // register the lnd invoices listener
+  let registerLndInvoiceListener = function(socket) {
+    socket._invoiceListener = {
+      dataReceived(data) {
+        socket.emit("invoice", data);
+      }
+    };
+    lnd.registerInvoiceListener(socket._invoiceListener);
+  };
+
+  // unregister the lnd invoices listener
+  let unregisterLndInvoiceListener = function(socket) {
+    lnd.unregisterInvoiceListener(socket._invoiceListener);
+  };
+
+  // register the socket listeners
+  let registerSocketListeners = function(socket) {
+    registerLndInvoiceListener(socket);
+  };
+
+  // unregister the socket listeners
+  let unregisterSocketListeners = function(socket) {
+    unregisterLndInvoiceListener(socket);
+  };
 
   io.on("connection", async function(socket) {
     // socketConnection = socket;
@@ -87,7 +112,7 @@ module.exports = function(
 
     if (authEnabled) {
       try {
-        var authorizationHeaderToken;
+        let authorizationHeaderToken;
         if (socket.handshake.query.auth) {
           authorizationHeaderToken = socket.handshake.query.auth;
         } else if (socket.handshake.headers.authorization) {
@@ -126,8 +151,6 @@ module.exports = function(
     /** pushing new client to client array*/
     clients.push(socket);
 
-    registerGlobalListeners();
-
     registerSocketListeners(socket);
 
     /** listening if client has disconnected */
@@ -137,31 +160,6 @@ module.exports = function(
       logger.debug("client disconnected (id=" + socket.id + ").");
     });
   });
-
-  // register the socket listeners
-  var registerSocketListeners = function(socket) {
-    registerLndInvoiceListener(socket);
-  };
-
-  // unregister the socket listeners
-  var unregisterSocketListeners = function(socket) {
-    unregisterLndInvoiceListener(socket);
-  };
-
-  // register the lnd invoices listener
-  var registerLndInvoiceListener = function(socket) {
-    socket._invoiceListener = {
-      dataReceived: function(data) {
-        socket.emit("invoice", data);
-      }
-    };
-    lnd.registerInvoiceListener(socket._invoiceListener);
-  };
-
-  // unregister the lnd invoices listener
-  var unregisterLndInvoiceListener = function(socket) {
-    lnd.unregisterInvoiceListener(socket._invoiceListener);
-  };
 
 
   return mySocketsEvents;
