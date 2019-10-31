@@ -1,5 +1,5 @@
 /**
- * @prettier
+ * @format
  */
 const ErrorCode = require("./errorCode");
 const Key = require("./key");
@@ -31,6 +31,9 @@ const __createInitialMessage = () => ({
  * Create a an outgoing feed. The feed will have an initial special acceptance
  * message. Returns a promise that resolves to the id of the newly-created
  * outgoing feed.
+ *
+ * If an outgoing feed is already created for the recipient, then returns the id
+ * of that one.
  * @param {string} withPublicKey Public key of the intended recipient of the
  * outgoing feed that will be created.
  * @throws {Error} If the outgoing feed cannot be created or if the initial
@@ -41,56 +44,129 @@ const __createInitialMessage = () => ({
  * @returns {Promise<string>}
  */
 const __createOutgoingFeed = async (withPublicKey, user, SEA) => {
-  try {
-    if (!user.is) {
-      throw new Error(ErrorCode.NOT_AUTH);
-    }
-    const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
-    const encryptedForMeRecipientPub = await SEA.encrypt(
-      withPublicKey,
-      mySecret
-    );
+  if (!user.is) {
+    throw new Error(ErrorCode.NOT_AUTH);
+  }
 
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+  if (typeof mySecret !== "string") {
+    throw new TypeError(
+      "__createOutgoingFeed() -> typeof mySecret !== 'string'"
+    );
+  }
+  const encryptedForMeRecipientPub = await SEA.encrypt(withPublicKey, mySecret);
+
+  const maybeEncryptedForMeOutgoingFeedID = await new Promise(res => {
+    user
+      .get(Key.RECIPIENT_TO_OUTGOING)
+      .get(withPublicKey)
+      .once(data => {
+        res(data);
+      });
+  });
+
+  let outgoingFeedID = "";
+
+  // if there was no stored outgoing, create an outgoing feed
+  if (typeof maybeEncryptedForMeOutgoingFeedID !== "string") {
     /** @type {PartialOutgoing} */
     const newPartialOutgoingFeed = {
       with: encryptedForMeRecipientPub
     };
 
-    /** @type {GUNNode} */
-    const outgoingFeedObj = await new Promise((res, rej) => {
-      const outFeed = user
+    /** @type {string} */
+    const newOutgoingFeedID = await new Promise((res, rej) => {
+      const _outFeedNode = user
         .get(Key.OUTGOINGS)
         .set(newPartialOutgoingFeed, ack => {
           if (ack.err) {
             rej(new Error(ack.err));
           } else {
-            res(outFeed);
+            res(_outFeedNode._.get);
           }
         });
     });
 
-    const outgoingFeedID = /** @type {string} */ (outgoingFeedObj._["#"]);
-
-    const outgoingFeed = user.get(Key.OUTGOINGS).get(outgoingFeedID);
+    if (typeof newOutgoingFeedID !== "string") {
+      throw new TypeError('typeof newOutgoingFeedID !== "string"');
+    }
 
     await new Promise((res, rej) => {
-      outgoingFeed.get(Key.MESSAGES).set(__createInitialMessage(), ack => {
-        if (ack.err) {
-          rej(new Error(ack.err));
-        } else {
-          res();
-        }
-      });
+      user
+        .get(Key.OUTGOINGS)
+        .get(newOutgoingFeedID)
+        .get(Key.MESSAGES)
+        .set(__createInitialMessage(), ack => {
+          if (ack.err) {
+            rej(new Error(ack.err));
+          } else {
+            res();
+          }
+        });
     });
 
-    return outgoingFeedID;
-  } catch (e) {
-    console.warn(
-      `Got an error ${e.message} setting the initial message on an outgoing feed. Will now try to null out the outgoing feed...`
+    const encryptedForMeNewOutgoingFeedID = await SEA.encrypt(
+      newOutgoingFeedID,
+      mySecret
     );
 
-    throw e;
+    if (typeof encryptedForMeNewOutgoingFeedID === "undefined") {
+      throw new TypeError(
+        "typeof encryptedForMeNewOutgoingFeedID === 'undefined'"
+      );
+    }
+
+    await new Promise((res, rej) => {
+      user
+        .get(Key.RECIPIENT_TO_OUTGOING)
+        .get(withPublicKey)
+        .put(encryptedForMeNewOutgoingFeedID, ack => {
+          if (ack.err) {
+            rej(Error(ack.err));
+          } else {
+            res();
+          }
+        });
+    });
+
+    outgoingFeedID = newOutgoingFeedID;
   }
+
+  // otherwise decrypt stored outgoing
+  else {
+    const decryptedOID = await SEA.decrypt(
+      maybeEncryptedForMeOutgoingFeedID,
+      mySecret
+    );
+
+    if (typeof decryptedOID !== "string") {
+      throw new TypeError(
+        "__createOutgoingFeed() -> typeof decryptedOID !== 'string'"
+      );
+    }
+
+    outgoingFeedID = decryptedOID;
+  }
+
+  if (typeof outgoingFeedID === "undefined") {
+    throw new TypeError(
+      '__createOutgoingFeed() -> typeof outgoingFeedID === "undefined"'
+    );
+  }
+
+  if (typeof outgoingFeedID !== "string") {
+    throw new TypeError(
+      "__createOutgoingFeed() -> expected outgoingFeedID to be an string"
+    );
+  }
+
+  if (outgoingFeedID.length === 0) {
+    throw new TypeError(
+      "__createOutgoingFeed() -> expected outgoingFeedID to be a populated string."
+    );
+  }
+
+  return outgoingFeedID;
 };
 
 /**
@@ -144,23 +220,27 @@ const acceptRequest = async (
       .once(epub => {
         if (typeof epub !== "string") {
           rej(new Error("Expected gun.user(pub).get(epub) to be an string."));
+        } else if (epub.length === 0) {
+          rej(
+            new Error(
+              "Expected gun.user(pub).get(epub) to be a populated string."
+            )
+          );
         } else {
-          if (epub.length === 0) {
-            rej(
-              new Error(
-                "Expected gun.user(pub).get(epub) to be a populated string."
-              )
-            );
-          } else {
-            res(epub);
-          }
+          res(epub);
         }
       });
   });
 
   const ourSecret = await SEA.secret(requestorEpub, user._.sea);
+  if (typeof ourSecret !== "string") {
+    throw new TypeError("typeof ourSecret !== 'string'");
+  }
 
   const incomingID = await SEA.decrypt(encryptedForUsIncomingID, ourSecret);
+  if (typeof incomingID !== "string") {
+    throw new TypeError("typeof incomingID !== 'string'");
+  }
 
   const newlyCreatedOutgoingFeedID = await outgoingFeedCreator(
     senderPublicKey,
@@ -169,6 +249,9 @@ const acceptRequest = async (
   );
 
   const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+  if (typeof mySecret !== "string") {
+    throw new TypeError("acceptRequest() -> typeof mySecret !== 'string'");
+  }
   const encryptedForMeIncomingID = await SEA.encrypt(incomingID, mySecret);
 
   await new Promise((res, rej) => {
@@ -184,35 +267,11 @@ const acceptRequest = async (
       });
   });
 
-  const encryptedForMeOutgoingID = await SEA.encrypt(
-    newlyCreatedOutgoingFeedID,
-    mySecret
-  );
-
-  await new Promise((res, rej) => {
-    user
-      .get(Key.RECIPIENT_TO_OUTGOING)
-      .get(senderPublicKey)
-      .put(encryptedForMeOutgoingID, ack => {
-        if (ack.err) {
-          rej(new Error(ack.err));
-        } else {
-          res();
-        }
-      });
-  });
-
   ////////////////////////////////////////////////////////////////////////////
   // NOTE: perform non-reversable actions before destructive actions
   // In case any of the non-reversable actions reject.
   // In this case, writing to the response is the non-revesarble op.
   ////////////////////////////////////////////////////////////////////////////
-
-  console.log("-----");
-  console.log(
-    `newly created for us outgoing ID: ${newlyCreatedOutgoingFeedID}`
-  );
-  console.log("-----");
 
   const encryptedForUsOutgoingID = await SEA.encrypt(
     newlyCreatedOutgoingFeedID,
@@ -228,7 +287,7 @@ const acceptRequest = async (
         if (ack.err) {
           rej(new Error(ack.err));
         } else {
-          res;
+          res();
         }
       }
     );
@@ -258,7 +317,7 @@ const authenticate = (user, pass, userNode) =>
       throw new TypeError("expected pass to have length greater than zero");
     }
 
-    if (!!userNode.is) {
+    if (typeof userNode.is === "undefined") {
       throw new Error(ErrorCode.ALREADY_AUTH);
     }
 
@@ -313,9 +372,9 @@ const generateNewHandshakeNode = (gun, user) =>
         if (ack.err) {
           reject(new Error(ack.err));
         } else {
-          user.get(Key.CURRENT_HANDSHAKE_NODE).put(newHandshakeNode, ack => {
-            if (ack.err) {
-              reject(new Error(ack.err));
+          user.get(Key.CURRENT_HANDSHAKE_NODE).put(newHandshakeNode, _ack => {
+            if (_ack.err) {
+              reject(new Error(_ack.err));
             } else {
               resolve();
             }
@@ -341,9 +400,9 @@ const logout = user => {
 
   if (logoutWasSuccessful) {
     return Promise.resolve();
-  } else {
-    return Promise.reject(new Error(ErrorCode.UNSUCCESSFUL_LOGOUT));
   }
+
+  return Promise.reject(new Error(ErrorCode.UNSUCCESSFUL_LOGOUT));
 };
 
 /**
@@ -354,8 +413,6 @@ const logout = user => {
  */
 const register = (alias, pass, user) =>
   new Promise((resolve, reject) => {
-    const u = /** @type {UserGUNNode} */ (user);
-
     if (typeof alias !== "string") {
       throw new TypeError();
     }
@@ -372,7 +429,7 @@ const register = (alias, pass, user) =>
       throw new Error();
     }
 
-    u.create(alias, pass, ack => {
+    user.create(alias, pass, ack => {
       if (ack.err) {
         reject(new Error(ack.err));
       } else {
@@ -382,7 +439,6 @@ const register = (alias, pass, user) =>
   });
 
 /**
- * Sends a handshake to the
  * @param {string} handshakeAddress
  * @param {string} recipientPublicKey
  * @param {GUNNode} gun
@@ -422,39 +478,6 @@ const sendHandshakeRequest = async (
     throw new TypeError("recipientPublicKey is an string of length 0");
   }
 
-  const outgoingFeedID = await __createOutgoingFeed(
-    recipientPublicKey,
-    user,
-    SEA
-  );
-
-  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
-
-  const encryptedForMeOutgoingID = await SEA.encrypt(outgoingFeedID, mySecret);
-
-  console.warn("------------");
-  console.warn(
-    `writing to recipient to outgoing: recipientKEY:: ${recipientPublicKey} -- outgoingID: ${encryptedForMeOutgoingID}`
-  );
-  console.warn("------");
-
-  await new Promise((res, rej) => {
-    user
-      .get(Key.RECIPIENT_TO_OUTGOING)
-      .get(recipientPublicKey)
-      .put(encryptedForMeOutgoingID, ack => {
-        if (ack.err) {
-          rej(
-            new Error(
-              `Error writing to recipientToOutgoing on handshake request creation: ${ack.err}`
-            )
-          );
-        } else {
-          res();
-        }
-      });
-  });
-
   /** @type {string} */
   const recipientEpub = await new Promise((res, rej) => {
     gun
@@ -471,36 +494,125 @@ const sendHandshakeRequest = async (
               `Expected gun.user(pub).get(epub) to be an string. Instead got: ${typeof epub}`
             )
           );
-        } else {
-          if (epub.length === 0) {
-            console.log(
-              "sendHandshakeRequest()-> Expected gun.user(pub).get(epub) to be a populated string."
-            );
+        } else if (epub.length === 0) {
+          console.log(
+            "sendHandshakeRequest()-> Expected gun.user(pub).get(epub) to be a populated string."
+          );
 
-            rej(
-              new Error(
-                "Expected gun.user(pub).get(epub) to be a populated string."
-              )
-            );
-          } else {
-            res(epub);
-          }
+          rej(
+            new Error(
+              "Expected gun.user(pub).get(epub) to be a populated string."
+            )
+          );
+        } else {
+          res(epub);
         }
       });
   });
 
-  const secret = await SEA.secret(recipientEpub, user._.sea);
-  const encryptedOutgoingFeedID = await SEA.encrypt(outgoingFeedID, secret);
+  const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+  if (typeof mySecret !== "string") {
+    throw new TypeError(
+      "sendHandshakeRequest() -> typeof mySecret !== 'string'"
+    );
+  }
+  const ourSecret = await SEA.secret(recipientEpub, user._.sea);
+  if (typeof ourSecret !== "string") {
+    throw new TypeError(
+      "sendHandshakeRequest() -> typeof ourSecret !== 'string'"
+    );
+  }
+
+  // check if successful handshake is present
+
+  /** @type {boolean} */
+  const alreadyHandshaked = await new Promise((res, rej) => {
+    user
+      .get(Key.USER_TO_INCOMING)
+      .get(recipientPublicKey)
+      .once(inc => {
+        if (typeof inc !== "string") {
+          res(false);
+        } else if (inc.length === 0) {
+          rej(
+            new Error(
+              `sendHRWithInitialMsg()-> obtained encryptedIncomingId from user-to-incoming an string but of length 0`
+            )
+          );
+        } else {
+          res(true);
+        }
+      });
+  });
+
+  if (alreadyHandshaked) {
+    throw new Error(ErrorCode.ALREADY_HANDSHAKED);
+  }
+
+  // check that we have already sent a request to this user, on his current
+  // handshake node
+  const lastRequestIDSentToUser = await user
+    .get(Key.USER_TO_LAST_REQUEST_SENT)
+    .get(recipientPublicKey)
+    .then();
+
+  if (typeof lastRequestIDSentToUser === "string") {
+    /** @type {boolean} */
+    const alreadyContactedOnCurrHandshakeNode = await new Promise(res => {
+      gun
+        .user(recipientPublicKey)
+        .get(Key.CURRENT_HANDSHAKE_NODE)
+        .get(lastRequestIDSentToUser)
+        .once(data => {
+          res(typeof data !== "undefined");
+        });
+    });
+
+    if (alreadyContactedOnCurrHandshakeNode) {
+      throw new Error(ErrorCode.ALREADY_REQUESTED_HANDSHAKE);
+    }
+  }
+
+  const currentHandshakeNode = await gun
+    .user(recipientPublicKey)
+    .get(Key.CURRENT_HANDSHAKE_NODE)
+    .then();
+
+  if (
+    typeof currentHandshakeNode !== "object" ||
+    currentHandshakeNode === null
+  ) {
+    throw new TypeError(
+      "typeof currentHandshakeNode !== 'object' || currentHandshakeNode === null"
+    );
+  } else {
+    const currHandshakeAddr = currentHandshakeNode._["#"];
+
+    if (currHandshakeAddr !== handshakeAddress) {
+      throw new Error(ErrorCode.STALE_HANDSHAKE_ADDRESS);
+    }
+  }
+
+  const outgoingFeedID = await __createOutgoingFeed(
+    recipientPublicKey,
+    user,
+    SEA
+  );
+
+  const encryptedForUsOutgoingFeedID = await SEA.encrypt(
+    outgoingFeedID,
+    ourSecret
+  );
 
   /** @type {HandshakeRequest} */
   const handshakeRequestData = {
-    response: encryptedOutgoingFeedID,
     from: user.is.pub,
+    response: encryptedForUsOutgoingFeedID,
     timestamp: Date.now()
   };
 
-  /** @type {GUNNode} */
-  const handshakeRequest = await new Promise((res, rej) => {
+  /** @type {string} */
+  const newHandshakeRequestID = await new Promise((res, rej) => {
     const hr = gun
       .get(Key.HANDSHAKE_NODES)
       .get(handshakeAddress)
@@ -508,10 +620,30 @@ const sendHandshakeRequest = async (
         if (ack.err) {
           rej(new Error(`Error trying to create request: ${ack.err}`));
         } else {
-          res(hr);
+          res(hr._.get);
         }
       });
   });
+
+  await new Promise((res, rej) => {
+    user
+      .get(Key.USER_TO_LAST_REQUEST_SENT)
+      .get(recipientPublicKey)
+      .put(newHandshakeRequestID, ack => {
+        if (ack.err) {
+          rej(new Error(ack.err));
+        } else {
+          res();
+        }
+      });
+  });
+
+  const handshakeRequest = gun
+    .get(Key.HANDSHAKE_NODES)
+    .get(handshakeAddress)
+    .get(newHandshakeRequestID);
+
+  // save request id to REQUEST_TO_USER
 
   const encryptedForMeRecipientPublicKey = await SEA.encrypt(
     recipientPublicKey,
@@ -520,10 +652,11 @@ const sendHandshakeRequest = async (
 
   // This needs to come before the write to sent requests. Because that write
   // triggers Jobs.onAcceptedRequests and it in turn reads from request-to-user
+  // This also triggers Events.onSimplerSentRequests
   await new Promise((res, rej) => {
     user
       .get(Key.REQUEST_TO_USER)
-      .get(handshakeRequest._["#"])
+      .get(newHandshakeRequestID)
       .put(encryptedForMeRecipientPublicKey, ack => {
         if (ack.err) {
           rej(
@@ -652,6 +785,10 @@ const sendMessage = async (recipientPublicKey, body, gun, user, SEA) => {
     });
 
     const mySecret = await SEA.secret(user._.sea.epub, user._.sea);
+    if (typeof mySecret !== "string") {
+      throw new TypeError("sendMessage() -> typeof mySecret !== 'string'");
+    }
+
     const outID = await SEA.decrypt(encryptedForMeOutgoingID, mySecret);
 
     if (typeof outID !== "string") {
@@ -668,6 +805,9 @@ const sendMessage = async (recipientPublicKey, body, gun, user, SEA) => {
   })();
 
   const ourSecret = await SEA.secret(recipientEpub, user._.sea);
+  if (typeof ourSecret !== "string") {
+    throw new TypeError("sendMessage() -> typeof ourSecret !== 'string'");
+  }
   const encryptedBody = await SEA.encrypt(body, ourSecret);
 
   const newMessage = {
@@ -785,16 +925,14 @@ const sendHRWithInitialMsg = async (
       .once(inc => {
         if (typeof inc !== "string") {
           res(false);
+        } else if (inc.length === 0) {
+          rej(
+            new Error(
+              `sendHRWithInitialMsg()-> obtained encryptedIncomingId from user-to-incoming an string but of length 0`
+            )
+          );
         } else {
-          if (inc.length === 0) {
-            rej(
-              new Error(
-                `sendHRWithInitialMsg()-> obtained encryptedIncomingId from user-to-incoming an string but of length 0`
-              )
-            );
-          } else {
-            res(true);
-          }
+          res(true);
         }
       });
   });
@@ -823,7 +961,7 @@ module.exports = {
   register,
   sendHandshakeRequest,
   sendMessage,
+  sendHRWithInitialMsg,
   setAvatar,
-  setDisplayName,
-  sendHRWithInitialMsg
+  setDisplayName
 };

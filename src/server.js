@@ -80,18 +80,17 @@ const server = async program => {
       };
       const auth = require("../services/auth/auth");
 
-      app.use((req, res, next) => {
+      app.use(async (req, res, next) => {
         if (unprotectedRoutes[req.method][req.path]) {
           next();
         } else {
           try {
-            auth.validateToken(req.headers.authorization.replace('Bearer ', '')).then(response => {
-              if (response.valid) {
-                next();
-              } else {
-                res.status(401).json({ message: "Please log in" });
-              }
-            });
+            const response = await auth.validateToken(req.headers.authorization.replace('Bearer ', ''));
+            if (response.valid) {
+              next();
+            } else {
+              res.status(401).json({ message: "Please log in" });
+            }
           } catch (e) {
             res.status(401).json({ message: "Please log in" });
           }
